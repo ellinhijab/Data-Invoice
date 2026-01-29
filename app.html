@@ -1,0 +1,2167 @@
+<!doctype html>
+<html lang="id" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF Invoice AutoCalc</title>
+  <script src="/_sdk/element_sdk.js" onerror="console.warn('[SDK] element_sdk.js tidak ditemukan (mode standalone)')"></script>
+  <script src="/_sdk/data_sdk.js" onerror="console.warn('[SDK] data_sdk.js tidak ditemukan (mode standalone)')"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+   <script src="./js/config.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+  <style>
+    body {
+      box-sizing: border-box;
+    }
+    
+    * {
+      box-sizing: border-box;
+    }
+
+    .file-drop-zone {
+      border: 3px dashed #cbd5e1;
+      transition: all 0.3s ease;
+    }
+
+    .file-drop-zone.drag-over {
+      border-color: #3b82f6;
+      background-color: #eff6ff;
+      transform: scale(1.02);
+    }
+
+    .spinner {
+      border: 4px solid #f3f4f6;
+      border-top: 4px solid #3b82f6;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .invoice-card {
+      transition: all 0.3s ease;
+    }
+
+    .invoice-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+    }
+
+    .toast {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 18px 28px;
+      border-radius: 16px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+      z-index: 1000;
+      animation: slideIn 0.4s ease;
+      font-weight: 600;
+    }
+
+    @keyframes slideIn {
+      from {
+        transform: translateX(400px);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    .item-row:hover {
+      background-color: #f0f9ff;
+    }
+
+    .payment-badge {
+      font-weight: 700;
+      padding: 6px 16px;
+      border-radius: 10px;
+      font-size: 0.875rem;
+    }
+
+    .gradient-bg {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .glass-card {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+  </style>
+  <style>@view-transition { navigation: auto; }</style>
+ </head>
+ <body class="h-full w-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 font-sans overflow-auto">
+  <div class="min-h-full w-full flex flex-col"><!-- Header -->
+   <header class="bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 text-white shadow-2xl border-b-4 border-indigo-400">
+    <div class="max-w-7xl mx-auto px-6 py-6">
+     <div class="flex items-center justify-between">
+      <div class="flex flex-col lg:flex-row lg:items-center gap-4">
+       <div class="w-16 h-16 bg-white bg-opacity-30 backdrop-blur-sm rounded-2xl flex items-center justify-center shadow-xl border-2 border-white border-opacity-40">
+        <svg class="w-9 h-9 text-white" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+       </div>
+       <div>
+        <h1 id="appTitle" class="text-3xl font-extrabold tracking-tight">PDF Invoice AutoCalc</h1>
+        <p class="text-base text-blue-100 font-medium">⚡ Upload, Hitung &amp; Validasi Invoice Otomatis</p>
+       </div>
+      </div>
+      <div class="flex items-center gap-6">
+       <div class="grid grid-cols-3 gap-5">
+        <div class="bg-white bg-opacity-20 backdrop-blur-md rounded-2xl px-6 py-4 text-center border border-white border-opacity-30 shadow-lg">
+         <p class="text-sm text-blue-100 font-semibold mb-1">📊 Total Invoice</p>
+         <p id="totalCount" class="text-3xl font-extrabold">0</p>
+        </div>
+        <div class="bg-white bg-opacity-20 backdrop-blur-md rounded-2xl px-6 py-4 text-center border border-white border-opacity-30 shadow-lg">
+         <p class="text-sm text-green-100 font-semibold mb-1">✅ Lunas</p>
+         <p id="paidCount" class="text-3xl font-extrabold text-green-300">0</p>
+        </div>
+        <div class="bg-white bg-opacity-20 backdrop-blur-md rounded-2xl px-6 py-4 text-center border border-white border-opacity-30 shadow-lg">
+         <p class="text-sm text-yellow-100 font-semibold mb-1">⏳ Belum Lunas</p>
+         <p id="unpaidCount" class="text-3xl font-extrabold text-yellow-300">0</p>
+        </div>
+       </div><button id="logoutBtn" class="px-6 py-4 bg-white bg-opacity-20 hover:bg-opacity-30 text-white font-bold rounded-2xl transition-all duration-200 flex items-center gap-2 shadow-xl hover:shadow-2xl hover:scale-105 border-2 border-white border-opacity-30">
+         🔒 Logout
+        </button>
+        <button id="resetAllBtn" class="px-7 py-4 bg-red-500 hover:bg-red-600 text-white font-bold rounded-2xl transition-all duration-200 flex items-center gap-3 shadow-xl hover:shadow-2xl hover:scale-105 border-2 border-red-400">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        </svg> Reset Semua </button>
+      </div>
+     </div>
+    </div>
+   </header><!-- Main Content -->
+   <main class="flex-1 max-w-7xl mx-auto px-6 py-8 w-full"><!-- Upload Section -->
+    <section class="mb-8">
+     <div class="glass-card rounded-3xl shadow-2xl p-10 border-2 border-blue-100">
+      <div class="flex items-center justify-between mb-6">
+       <div class="flex items-center gap-3">
+        <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+         <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+         </svg>
+        </div>
+        <h2 class="text-3xl font-extrabold text-gray-900">📄 Upload Invoice PDF</h2>
+       </div><button id="toggleUpload" class="w-10 h-10 bg-blue-100 hover:bg-blue-200 rounded-xl flex items-center justify-center transition-all shadow-md">
+        <svg class="w-6 h-6 text-blue-600 transform transition-transform" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7" />
+        </svg></button>
+      </div>
+      <div id="uploadContent">
+       <div id="dropZone" class="file-drop-zone bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-16 text-center cursor-pointer border-4">
+        <div class="flex flex-col items-center">
+         <div class="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mb-6 shadow-lg">
+          <svg class="w-14 h-14 text-blue-600" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+          </svg>
+         </div>
+         <p class="text-2xl font-bold text-gray-800 mb-3">Drag &amp; Drop PDF Invoice di Sini</p>
+         <p class="text-gray-500 mb-6 text-lg">atau klik tombol di bawah</p><label for="fileInput" class="px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-2xl cursor-pointer transition-all duration-200 shadow-xl hover:shadow-2xl hover:scale-105 text-lg"> 📁 Pilih File PDF (Bisa Banyak) </label> <input type="file" id="fileInput" accept="application/pdf,.pdf,application/x-pdf" multiple class="hidden">
+         <p class="text-sm text-gray-500 mt-4 font-medium">💡 Upload hingga 100 file sekaligus</p>
+        </div>
+       </div><!-- Loading State -->
+       <div id="loadingState" class="hidden mt-6 p-8 bg-blue-50 border-3 border-blue-300 rounded-2xl shadow-lg">
+        <div class="flex items-center gap-6">
+         <div class="spinner"></div>
+         <div class="flex-1">
+          <p class="font-bold text-gray-900 text-xl mb-2">Memproses invoice...</p>
+          <p id="loadingProgress" class="text-base text-gray-600 mb-3">Ekstraksi data dan perhitungan otomatis</p>
+          <div class="mt-2 bg-white rounded-full h-3 overflow-hidden shadow-inner">
+           <div id="progressBar" class="bg-gradient-to-r from-blue-600 to-indigo-600 h-full transition-all duration-300" style="width: 0%"></div>
+          </div>
+         </div>
+        </div>
+       </div>
+      </div>
+     </div>
+    </section><!-- Summary Total Agregat -->
+    <section class="mb-8">
+     <div class="bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 rounded-3xl shadow-2xl p-8 border-2 border-indigo-300">
+      <div class="flex items-center justify-between mb-6">
+       <div class="flex items-center gap-3">
+        <h3 class="text-white text-2xl font-extrabold flex items-center gap-3"><span class="w-10 h-10 bg-white bg-opacity-30 rounded-xl flex items-center justify-center">💰</span> Ringkasan Total (Filter Aktif)</h3>
+       </div>
+       <div class="flex gap-4"><button id="toggleSummary" class="w-10 h-10 bg-white bg-opacity-30 hover:bg-opacity-40 rounded-xl flex items-center justify-center transition-all shadow-md">
+         <svg class="w-6 h-6 text-white transform transition-transform" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7" />
+         </svg></button> <button id="shareWhatsAppBtn" class="px-7 py-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-2xl transition-all duration-200 flex items-center gap-3 shadow-xl hover:shadow-2xl hover:scale-105 border-2 border-green-400">
+         <svg class="w-6 h-6" fill="currentColor" viewbox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+         </svg> Share WA </button> <button id="payAllBtn" class="px-7 py-4 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl transition-all duration-200 flex items-center gap-3 shadow-xl hover:shadow-2xl hover:scale-105 border-2 border-emerald-400">
+         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+         </svg> Bayar Semua </button>
+       </div>
+      </div>
+      <div id="summaryContent" class="grid grid-cols-3 gap-6">
+       <div class="bg-white bg-opacity-25 backdrop-blur-lg rounded-2xl p-6 text-center shadow-xl border border-white border-opacity-40">
+        <p class="text-base text-white text-opacity-95 mb-3 font-semibold">Total Semua Invoice</p>
+        <p id="summaryTotalInvoice" class="text-4xl font-extrabold text-white">Rp 0</p>
+       </div>
+       <div class="bg-white bg-opacity-25 backdrop-blur-lg rounded-2xl p-6 text-center shadow-xl border border-white border-opacity-40">
+        <p class="text-base text-white text-opacity-95 mb-3 font-semibold">Total Sudah Dibayar</p>
+        <p id="summaryTotalPaid" class="text-4xl font-extrabold text-green-300">Rp 0</p>
+       </div>
+       <div class="bg-white bg-opacity-25 backdrop-blur-lg rounded-2xl p-6 text-center shadow-xl border border-white border-opacity-40">
+        <p class="text-base text-white text-opacity-95 mb-3 font-semibold">Total Sisa Tagihan</p>
+        <p id="summaryTotalRemaining" class="text-4xl font-extrabold text-yellow-300">Rp 0</p>
+       </div>
+      </div>
+     </div>
+    </section><!-- Filter & Stats -->
+    <section class="mb-6">
+     <div class="glass-card rounded-3xl shadow-2xl p-8 border-2 border-blue-100">
+      <div class="mb-6">
+       <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center gap-3">
+         <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+          <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+         </div>
+         <h2 class="text-3xl font-extrabold text-gray-900">📋 Daftar Invoice</h2>
+        </div><button id="toggleFilter" class="w-10 h-10 bg-blue-100 hover:bg-blue-200 rounded-xl flex items-center justify-center transition-all shadow-md">
+         <svg class="w-6 h-6 text-blue-600 transform transition-transform" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7" />
+         </svg></button>
+       </div>
+       <div id="filterContent">
+
+        <!-- Admin/Owner Panel -->
+        <div id="adminPanel" class="mb-5 hidden bg-gradient-to-r from-slate-50 to-gray-50 border-3 border-slate-300 rounded-2xl p-5 shadow-md">
+          <div class="flex flex-col lg:flex-row lg:items-center gap-4 w-full">
+            <div class="flex items-center gap-3 shrink-0">
+              <span class="text-base font-extrabold text-gray-800">👑 Mode Admin</span>
+              <span id="adminRoleBadge" class="text-xs font-bold px-3 py-1 rounded-full bg-slate-200 text-slate-800">ROLE</span>
+            </div>
+            <div class="flex flex-col sm:flex-row gap-3 w-full">
+              <select id="adminUserSelect" class="w-full sm:w-96 px-6 py-3 border-3 border-slate-300 rounded-xl focus:border-slate-500 focus:outline-none text-base font-bold shadow-md bg-white hover:bg-slate-50 transition-all">
+                <option value="all">📊 Semua User</option>
+              </select>
+              <div class="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                <span>Menampilkan data:</span>
+                <span id="adminUserLabel" class="font-extrabold">Semua User</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mb-5 bg-gradient-to-r from-purple-50 to-pink-50 border-3 border-purple-300 rounded-2xl p-5 shadow-md">
+         <div class="flex flex-wrap items-center gap-4 w-full">
+          <div class="flex items-center gap-3">
+           <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+           </svg><label class="text-base font-bold text-gray-800">📦 Arsip Per Bulan:</label>
+          </div><select id="monthArchive" class="w-full sm:w-80 px-6 py-3 border-3 border-purple-300 rounded-xl focus:border-purple-500 focus:outline-none text-base font-bold shadow-md bg-white hover:bg-purple-50 transition-all"> <option value="">📊 Semua Bulan</option> </select>
+          <div id="monthArchiveInfo" class="text-sm font-semibold text-purple-700 flex items-center"></div>
+         </div>
+        </div><!-- Filter Tanggal Range -->
+        <div class="flex flex-col lg:flex-row lg:items-center gap-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-3 border-blue-300 rounded-2xl p-5 shadow-md">
+         <div class="flex items-center gap-3">
+          <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg><label class="text-base font-bold text-gray-800">Filter Tanggal:</label>
+         </div>
+         
+         <div class="flex flex-wrap items-center gap-4 w-full">
+          <div class="flex items-center gap-2"><label class="text-sm font-semibold text-gray-700">Dari:</label> <input type="date" id="dateFrom" class="w-full sm:w-auto px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none text-sm font-medium shadow-sm">
+          </div><span class="text-gray-400 text-xl">—</span>
+          <div class="flex items-center gap-2"><label class="text-sm font-semibold text-gray-700">Sampai:</label> <input type="date" id="dateTo" class="w-full sm:w-auto px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none text-sm font-medium shadow-sm">
+          </div><button id="clearDateFilter" class="w-full sm:w-auto px-5 py-3 bg-red-100 hover:bg-red-200 text-red-700 font-bold rounded-xl transition text-sm shadow-md"> 🔄 Reset Tanggal </button>
+         </div>
+        </div>
+       </div>
+       <div class="flex items-center justify-between">
+        <div class="flex flex-wrap gap-3 mt-4">
+        <button id="filterAll" class="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white font-bold rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"> 📊 Semua (<span id="countAll">0</span>) </button> <button id="filterMatch" class="w-full sm:w-auto px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-all duration-200 shadow-md"> ✅ Cocok (<span id="countMatch">0</span>) </button> <button id="filterMismatch" class="w-full sm:w-auto px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-all duration-200 shadow-md"> ⚠️ Selisih (<span id="countMismatch">0</span>) </button> <button id="filterPaid" class="w-full sm:w-auto px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-all duration-200 shadow-md"> 💰 Lunas (<span id="countPaid">0</span>) </button> <button id="filterUnpaid" class="w-full sm:w-auto px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-all duration-200 shadow-md"> ⏳ Belum Lunas (<span id="countUnpaid">0</span>) </button>
+        </div>
+        <div class="text-base text-gray-700 font-semibold"><span id="dateRangeInfo"></span>
+        </div>
+       </div>
+      </div>
+     </div>
+    </section><!-- Invoice List -->
+    <section>
+     <div id="invoiceList" class="space-y-5"><!-- Empty State -->
+      <div id="emptyState" class="glass-card rounded-3xl shadow-2xl text-center py-20 border-2 border-gray-200">
+       <div class="w-32 h-32 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+        <svg class="w-20 h-20 text-gray-400" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+       </div>
+       <p class="text-3xl font-extrabold text-gray-400 mb-3">Belum ada invoice</p>
+       <p class="text-xl text-gray-400 mb-6">Upload PDF invoice untuk memulai</p><button onclick="document.getElementById('fileInput').click()" class="px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-2xl transition-all duration-200 shadow-xl hover:shadow-2xl hover:scale-105 text-lg"> 📁 Upload Invoice Sekarang </button>
+      </div>
+     </div><!-- Pagination -->
+     <div id="paginationContainer" class="hidden glass-card rounded-3xl shadow-2xl mt-6 p-8 border-2 border-blue-100">
+      <div class="flex items-center justify-between">
+       <div class="text-base text-gray-700 font-semibold">
+        Menampilkan <span id="showingStart" class="font-extrabold text-blue-600">0</span> - <span id="showingEnd" class="font-extrabold text-blue-600">0</span> dari <span id="totalItems" class="font-extrabold text-blue-600">0</span> invoice
+       </div>
+       <div class="flex items-center gap-3"><button id="prevPage" class="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md"> ← Sebelumnya </button>
+        <div id="pageNumbers" class="flex gap-2"><!-- Page numbers will be inserted here -->
+        </div><button id="nextPage" class="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md"> Selanjutnya → </button>
+       </div>
+      </div>
+     </div>
+    </section>
+   </main><!-- Footer -->
+   <footer class="bg-white border-t-2 border-gray-200 mt-8 shadow-inner">
+    <div class="max-w-7xl mx-auto px-6 py-6 text-center text-gray-600">
+     <p class="text-base font-semibold">✨ PDF Invoice AutoCalc - Hitung &amp; Validasi Invoice Otomatis ✨</p>
+    </div>
+   </footer>
+  </div><!-- Detail Modal -->
+  <div id="detailModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+   <div class="bg-white rounded-3xl shadow-2xl max-w-5xl w-full border-2 border-blue-200" style="max-height: 90%; overflow-y: auto;">
+    <div class="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-8 flex items-center justify-between z-10 rounded-t-3xl">
+     <h3 class="text-3xl font-extrabold">📋 Detail Invoice</h3><button id="closeModal" class="w-12 h-12 bg-white bg-opacity-30 hover:bg-opacity-40 rounded-xl flex items-center justify-center transition shadow-lg">
+      <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
+      </svg></button>
+    </div>
+    <div id="modalContent" class="p-8"><!-- Content will be inserted here -->
+    </div>
+   </div>
+  </div><!-- Reset Confirmation Modal -->
+  <div id="resetModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+   <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full border-2 border-red-200">
+    <div class="bg-gradient-to-r from-red-600 to-rose-600 text-white p-8 rounded-t-3xl">
+     <h3 class="text-3xl font-extrabold">⚠️ Konfirmasi Reset</h3>
+    </div>
+    <div class="p-8">
+     <div class="mb-8 text-center">
+      <div class="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+       <svg class="w-14 h-14 text-red-600" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+       </svg>
+      </div>
+      <p class="text-2xl font-extrabold text-gray-900 mb-4">Hapus Semua Data?</p>
+      <p class="text-gray-600 mb-3 font-medium">Anda akan menghapus:</p>
+      <p id="resetCount" class="text-3xl font-extrabold text-red-600 mb-4">0 invoice</p>
+      <p class="text-base text-red-600 font-bold">⚠️ Tindakan ini tidak dapat dibatalkan!</p>
+     </div>
+     <div class="flex gap-4"><button id="confirmReset" class="flex-1 px-8 py-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-2xl transition-all duration-200 shadow-lg hover:shadow-xl"> Ya, Hapus Semua </button> <button id="cancelReset" class="flex-1 px-8 py-4 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-2xl transition-all duration-200 shadow-lg"> Batal </button>
+     </div>
+    </div>
+   </div>
+  </div><!-- Payment Modal -->
+  <div id="paymentModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+   <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full border-2 border-green-200">
+    <div class="bg-gradient-to-r from-green-600 to-emerald-600 text-white p-8 rounded-t-3xl">
+     <h3 class="text-3xl font-extrabold">💰 Catat Pembayaran</h3>
+    </div>
+    <div class="p-8">
+     <div class="mb-6"><label class="block text-sm font-bold text-gray-800 mb-3">Invoice No</label> <input id="paymentInvoiceNo" type="text" readonly class="w-full px-5 py-4 bg-gray-100 border-2 border-gray-300 rounded-xl text-gray-900 font-bold shadow-sm">
+     </div>
+     <div class="mb-6"><label for="paymentAmount" class="block text-sm font-bold text-gray-800 mb-3">Jumlah Pembayaran</label>
+      <div class="relative"><span class="absolute left-5 top-4 text-gray-500 font-bold">Rp</span> <input id="paymentAmount" type="number" min="0" step="1000" class="w-full pl-14 pr-5 py-4 border-3 border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none text-xl font-bold shadow-sm" placeholder="0">
+      </div>
+      <p id="remainingInfo" class="text-sm text-gray-600 mt-3 font-medium"></p>
+     </div>
+     <div class="mb-8"><label for="paymentMethod" class="block text-sm font-bold text-gray-800 mb-3">Metode Pembayaran</label> <select id="paymentMethod" class="w-full px-5 py-4 border-3 border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none font-bold shadow-sm"> <option value="Cash">💵 Cash</option> <option value="Transfer Bank">🏦 Transfer Bank</option> <option value="Kartu Kredit">💳 Kartu Kredit</option> <option value="E-Wallet">📱 E-Wallet</option> <option value="Lainnya">📝 Lainnya</option> </select>
+     </div>
+     <div class="flex gap-4"><button id="savePayment" class="flex-1 px-8 py-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-2xl transition-all duration-200 shadow-lg hover:shadow-xl"> Simpan Pembayaran </button> <button id="closePaymentModal" class="px-8 py-4 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-2xl transition-all duration-200 shadow-lg"> Batal </button>
+     </div>
+    </div>
+   </div>
+  </div><!-- Pay All Modal -->
+  <div id="payAllModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+   <div class="bg-white rounded-3xl shadow-2xl max-w-2xl w-full border-2 border-green-200" style="max-height: 90%; overflow-y: auto;">
+    <div class="sticky top-0 bg-gradient-to-r from-green-600 to-emerald-600 text-white p-8 rounded-t-3xl z-10">
+     <h3 class="text-3xl font-extrabold">💰 Bayar Semua Invoice</h3>
+     <p class="text-base text-green-100 mt-2 font-medium">Lunasi seluruh sisa tagihan sekaligus</p>
+    </div>
+    <div class="p-8">
+     <div class="mb-8">
+      <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border-3 border-blue-300 rounded-2xl p-6 shadow-md">
+       <div class="grid grid-cols-2 gap-6 text-center">
+        <div>
+         <p class="text-sm text-gray-600 mb-2 font-semibold">Total Invoice Belum Lunas</p>
+         <p id="payAllCount" class="text-3xl font-extrabold text-gray-900">0 invoice</p>
+        </div>
+        <div>
+         <p class="text-sm text-gray-600 mb-2 font-semibold">Total Sisa Tagihan</p>
+         <p id="payAllTotalAmount" class="text-3xl font-extrabold text-orange-700">Rp 0</p>
+        </div>
+       </div>
+      </div>
+     </div>
+     <div class="mb-6"><label for="payAllAmountInput" class="block text-sm font-bold text-gray-800 mb-3">Jumlah Pembayaran yang Diterima</label>
+      <div class="relative"><span class="absolute left-5 top-4 text-gray-500 font-bold">Rp</span> <input id="payAllAmountInput" type="number" min="0" step="1000" class="w-full pl-14 pr-5 py-4 border-3 border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none text-xl font-bold shadow-sm" placeholder="0">
+      </div>
+      <p id="payAllRemainingInfo" class="text-sm text-gray-600 mt-3 font-medium"></p>
+      <div class="bg-blue-50 border-2 border-blue-300 rounded-xl p-4 mt-4">
+       <p class="text-sm text-blue-800 font-semibold">💡 <strong>Pembayaran Otomatis:</strong> Sistem akan membagi pembayaran ke invoice yang belum lunas, dimulai dari invoice dengan sisa tagihan terkecil untuk melunasi sebanyak mungkin invoice.</p>
+      </div>
+     </div>
+     <div class="mb-6"><label for="payAllMethod" class="block text-sm font-bold text-gray-800 mb-3">Metode Pembayaran</label> <select id="payAllMethod" class="w-full px-5 py-4 border-3 border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none font-bold shadow-sm"> <option value="Cash">💵 Cash</option> <option value="Transfer Bank">🏦 Transfer Bank</option> <option value="Kartu Kredit">💳 Kartu Kredit</option> <option value="E-Wallet">📱 E-Wallet</option> <option value="Lainnya">📝 Lainnya</option> </select>
+     </div>
+     <div id="payAllInvoiceList" class="mb-8 max-h-60 overflow-y-auto border-2 border-gray-300 rounded-2xl shadow-inner"><!-- Invoice list will be inserted here -->
+     </div>
+     <div class="flex gap-4"><button id="confirmPayAll" class="flex-1 px-8 py-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-2xl transition-all duration-200 shadow-lg hover:shadow-xl"> Konfirmasi Pembayaran </button> <button id="closePayAllModal" class="px-8 py-4 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-2xl transition-all duration-200 shadow-lg"> Batal </button>
+     </div>
+    </div>
+   </div>
+  </div>
+  <script>
+    // Configure PDF.js to work without worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc = null;
+    
+    // Helper: parse angka Rupiah dari input yang mungkin berformat 1.234.567 atau 1,234,567
+    function parseRupiah(val) {
+      const s = String(val ?? '').trim();
+      if (!s) return 0;
+      const digits = s.replace(/[^0-9]/g, '');
+      return digits ? parseInt(digits, 10) : 0;
+    }
+
+    const defaultConfig = {
+       app_title: 'PDF Invoice AutoCalc'
+     };
+
+     // ---- Fallback mode (when /_sdk/data_sdk.js is not available) ----
+     // If you open this HTML directly (file://) or on a server without the Element/Data SDK,
+     // window.dataSdk will be undefined and uploads will always "fail" at create/update/delete.
+     // This fallback stores invoices in the browser (localStorage) so the app works standalone.
+     const __LOCAL_STORAGE_KEY__ = 'pdf_invoice_autocalc_invoices_v1';
+
+     const localDataSdk = {
+       _handler: null,
+       async init(handler) {
+         this._handler = handler;
+         const raw = localStorage.getItem(__LOCAL_STORAGE_KEY__);
+         const data = raw ? JSON.parse(raw) : [];
+         handler?.onDataChanged?.(data);
+         showToast('ℹ️ Mode lokal aktif: data disimpan di browser (localStorage).', 'success');
+         return { isOk: true, value: data };
+       },
+       async create(obj) {
+         const raw = localStorage.getItem(__LOCAL_STORAGE_KEY__);
+         const data = raw ? JSON.parse(raw) : [];
+         const id = (crypto?.randomUUID ? crypto.randomUUID() : (Date.now() + '-' + Math.random().toString(16).slice(2)));
+         const created = { ...obj, __backendId: id };
+         data.push(created);
+         localStorage.setItem(__LOCAL_STORAGE_KEY__, JSON.stringify(data));
+         this._handler?.onDataChanged?.(data);
+         return { isOk: true, value: created };
+       },
+       async update(obj) {
+         const raw = localStorage.getItem(__LOCAL_STORAGE_KEY__);
+         const data = raw ? JSON.parse(raw) : [];
+         const idx = data.findIndex(x => x.__backendId === obj.__backendId || (x.fingerprint && obj.fingerprint && x.fingerprint === obj.fingerprint));
+         if (idx >= 0) {
+           data[idx] = { ...data[idx], ...obj };
+           localStorage.setItem(__LOCAL_STORAGE_KEY__, JSON.stringify(data));
+           this._handler?.onDataChanged?.(data);
+           return { isOk: true, value: data[idx] };
+         }
+         return { isOk: false, error: 'Not found' };
+       },
+       async delete(obj) {
+         const raw = localStorage.getItem(__LOCAL_STORAGE_KEY__);
+         const data = raw ? JSON.parse(raw) : [];
+         const before = data.length;
+         const filtered = data.filter(x => !(x.__backendId === obj.__backendId || (x.fingerprint && obj.fingerprint && x.fingerprint === obj.fingerprint)));
+         localStorage.setItem(__LOCAL_STORAGE_KEY__, JSON.stringify(filtered));
+         this._handler?.onDataChanged?.(filtered);
+         return { isOk: filtered.length !== before ? true : false };
+       }
+     };
+
+     // ---------------- Supabase DB/Storage layer ----------------
+      const SUPABASE_URL = window.__SUPABASE_URL;
+      const SUPABASE_ANON_KEY = window.__SUPABASE_ANON_KEY;
+      const SUPABASE_BUCKET = window.__SUPABASE_BUCKET || 'invoices';
+      const sb = (SUPABASE_URL && SUPABASE_ANON_KEY)
+        ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+        : null;
+
+      // Role/RBAC helpers
+      let __myRole = 'user';
+      let __isPrivileged = false; // admin/owner
+      let __selectedUserId = 'all';
+
+      async function loadMyProfile() {
+        if (!sb) return null;
+        const session = await ensureSessionOrRedirect();
+        const uid = session?.user?.id;
+        if (!uid) return null;
+
+        const { data, error } = await sb.from('profiles').select('id,email,role,full_name,username').eq('id', uid).single();
+        if (error) {
+          console.warn('[profiles] gagal load role:', error);
+          return null;
+        }
+        __myRole = data?.role || 'user';
+        __isPrivileged = (__myRole === 'admin' || __myRole === 'owner');
+        return data;
+      }
+
+      async function populateAdminPanel() {
+        const panel = document.getElementById('adminPanel');
+        const select = document.getElementById('adminUserSelect');
+        const badge = document.getElementById('adminRoleBadge');
+        const label = document.getElementById('adminUserLabel');
+
+        if (!panel || !select || !badge || !label) return;
+
+        if (!__isPrivileged) {
+          panel.classList.add('hidden');
+          return;
+        }
+
+        panel.classList.remove('hidden');
+        badge.textContent = String(__myRole).toUpperCase();
+
+        // Load all users (profiles) for dropdown
+        const { data, error } = await sb
+          .from('profiles')
+          .select('id,email,full_name,username,role')
+          .order('email', { ascending: true });
+
+        if (error) {
+          console.warn('[profiles] gagal load user list:', error);
+          return;
+        }
+
+        // Keep current selection
+        const current = select.value || 'all';
+
+        // Reset options
+        select.innerHTML = '';
+        const optAll = document.createElement('option');
+        optAll.value = 'all';
+        optAll.textContent = '📊 Semua User';
+        select.appendChild(optAll);
+
+        (data || []).forEach(u => {
+          const opt = document.createElement('option');
+          opt.value = u.id;
+          const name = u.full_name || u.username || u.email || u.id.slice(0, 8);
+          const email = u.email ? ` (${u.email})` : '';
+          opt.textContent = `${name}${email}`;
+          select.appendChild(opt);
+        });
+
+        // Restore selection
+        if ([...select.options].some(o => o.value === current)) {
+          select.value = current;
+        } else {
+          select.value = 'all';
+        }
+        __selectedUserId = select.value;
+
+        label.textContent = (select.value === 'all')
+          ? 'Semua User'
+          : (select.options[select.selectedIndex]?.textContent || 'User');
+
+        // Hook change
+        if (!select.__hooked) {
+          select.addEventListener('change', async () => {
+            __selectedUserId = select.value || 'all';
+            label.textContent = (select.value === 'all')
+              ? 'Semua User'
+              : (select.options[select.selectedIndex]?.textContent || 'User');
+            await refreshAndNotify(window.dataSdk?._handler);
+          });
+          select.__hooked = true;
+        }
+      }
+
+      function dbToInvoice(row) {
+        if (!row) return row;
+        // keep UI expectations: __backendId + same fields
+        const inv = { ...row, __backendId: row.id };
+        delete inv.id;
+        return inv;
+      }
+
+      async function refreshAndNotify(handler) {
+        if (!sb) return;
+        let q = sb.from('invoices').select('*').order('uploaded_at', { ascending: false });
+        if (__isPrivileged && __selectedUserId && __selectedUserId !== 'all') {
+          q = q.eq('user_id', __selectedUserId);
+        }
+        const { data, error } = await q;
+        if (error) throw error;
+        handler?.onDataChanged?.(data.map(dbToInvoice));
+      }
+
+      async function ensureSessionOrRedirect() {
+        if (!sb) return null;
+        const { data } = await sb.auth.getSession();
+        if (!data?.session) {
+          window.location.href = './login.html';
+          return null;
+        }
+        return data.session;
+      }
+
+      const supabaseDataSdk = {
+        _handler: null,
+        async init(handler) {
+          this._handler = handler;
+          if (!sb) {
+            showToast('ℹ️ Supabase belum di-set. Mode lokal aktif (localStorage).', 'success');
+            const raw = localStorage.getItem(__LOCAL_STORAGE_KEY__);
+            const data = raw ? JSON.parse(raw) : [];
+            handler?.onDataChanged?.(data);
+            return { isOk: true, value: data };
+          }
+
+          await ensureSessionOrRedirect();
+
+          await loadMyProfile();
+          await populateAdminPanel();
+
+          try {
+            await refreshAndNotify(handler);
+            showToast('✅ Terhubung ke Supabase (multi-user aktif).', 'success');
+            return { isOk: true, value: [] };
+          } catch (e) {
+            console.error(e);
+            showToast('Gagal load data dari Supabase. Cek tabel/RLS.', 'error');
+            return { isOk: false, error: e?.message || String(e) };
+          }
+        },
+
+        async create(obj) {
+          if (!sb) return localDataSdk.create(obj);
+          await ensureSessionOrRedirect();
+
+          try {
+            // 1) Upload PDF (kalau ada)
+            let pdf_path = obj.pdf_path || null;
+            if (obj.__pdfFile) {
+              const session = await ensureSessionOrRedirect();
+              const userId = session?.user?.id;
+              const file = obj.__pdfFile;
+              const ext = (file.name.split('.').pop() || 'pdf').toLowerCase();
+              const filename = `${Date.now()}-${Math.random().toString(16).slice(2)}.${ext}`;
+              const path = `${userId}/${filename}`;
+
+              const up = await sb.storage.from(SUPABASE_BUCKET).upload(path, file, {
+                contentType: file.type || 'application/pdf',
+                upsert: false
+              });
+              if (up.error) throw up.error;
+              pdf_path = path;
+            }
+
+            // 2) Insert row
+            const payload = { ...obj };
+            delete payload.__backendId;
+            delete payload.__pdfFile;
+            payload.pdf_bucket = SUPABASE_BUCKET;
+            payload.pdf_path = pdf_path;
+            payload.original_filename = payload.original_filename || obj.__pdfFile?.name || null;
+            payload.file_size = payload.file_size || obj.__pdfFile?.size || null;
+
+            const ins = await sb.from('invoices').insert(payload).select('*').single();
+            if (ins.error) throw ins.error;
+
+            // 3) Refresh list
+            await refreshAndNotify(this._handler);
+            return { isOk: true, value: dbToInvoice(ins.data) };
+          } catch (e) {
+            console.error(e);
+            showToast('Gagal simpan ke Supabase: ' + (e?.message || e), 'error');
+            return { isOk: false, error: e?.message || String(e) };
+          }
+        },
+
+        async update(obj) {
+          if (!sb) return localDataSdk.update(obj);
+          await ensureSessionOrRedirect();
+
+          try {
+            const id = obj.__backendId;
+            const payload = { ...obj };
+            delete payload.__backendId;
+            delete payload.__pdfFile;
+
+            const upd = await sb.from('invoices').update(payload).eq('id', id).select('*').single();
+            if (upd.error) throw upd.error;
+
+            await refreshAndNotify(this._handler);
+            return { isOk: true, value: dbToInvoice(upd.data) };
+          } catch (e) {
+            console.error(e);
+            showToast('Gagal update: ' + (e?.message || e), 'error');
+            return { isOk: false, error: e?.message || String(e) };
+          }
+        },
+
+        async delete(obj) {
+          if (!sb) return localDataSdk.delete(obj);
+          await ensureSessionOrRedirect();
+
+          const id = obj.__backendId;
+          try {
+            // 1) Hapus file dulu (jika ada)
+            const path = obj.pdf_path;
+            const bucket = obj.pdf_bucket || SUPABASE_BUCKET;
+            if (path) {
+              const rm = await sb.storage.from(bucket).remove([path]);
+              if (rm.error) throw rm.error;
+            }
+
+            // 2) Hapus row
+            const del = await sb.from('invoices').delete().eq('id', id);
+            if (del.error) throw del.error;
+
+            await refreshAndNotify(this._handler);
+            return { isOk: true };
+          } catch (e) {
+            console.error(e);
+            showToast('Gagal hapus: ' + (e?.message || e), 'error');
+            return { isOk: false, error: e?.message || String(e) };
+          }
+        }
+      };
+
+      // Prefer Supabase when configured; fallback to browser localStorage.
+      window.dataSdk = supabaseDataSdk;
+let invoices = [];
+    let currentFilter = 'all';
+    let currentInvoiceForPayment = null;
+    let dateFromFilter = null;
+    let dateToFilter = null;
+    let currentPage = 1;
+    let selectedMonthArchive = '';
+    const itemsPerPage = 10;
+
+    const dataHandler = {
+      onDataChanged(data) {
+        invoices = data;
+        populateMonthArchive();
+        renderInvoiceList();
+        updateCounts();
+      }
+    };
+
+    async function initApp() {
+      const result = await window.dataSdk.init(dataHandler);
+      if (!result.isOk) {
+        showToast('Gagal menginisialisasi aplikasi', 'error');
+      }
+    }
+
+     // Logout (Supabase only)
+     document.getElementById('logoutBtn')?.addEventListener('click', async () => {
+       try {
+         if (typeof sb !== 'undefined' && sb) {
+           await sb.auth.signOut();
+         }
+       } finally {
+         window.location.href = './login.html';
+       }
+     });
+
+    function generateFingerprint(invoiceNo, date, total) {
+      const str = `${invoiceNo}-${date}-${total}`;
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+      }
+      return Math.abs(hash).toString(36);
+    }
+
+    function checkDuplicate(fingerprint) {
+      return invoices.some(inv => inv.fingerprint === fingerprint);
+    }
+
+    function parseMoneyAuto(str) {
+      if (!str) return 0;
+      
+      let cleaned = str.replace(/[RpIDR\s]/gi, '').trim();
+      
+      const lastDot = cleaned.lastIndexOf('.');
+      const lastComma = cleaned.lastIndexOf(',');
+      
+      if (lastDot === -1 && lastComma === -1) {
+        return Math.round(Number(cleaned));
+      }
+      
+      const lastSepIndex = Math.max(lastDot, lastComma);
+      const afterLastSep = cleaned.substring(lastSepIndex + 1);
+      
+      if (afterLastSep.length === 2 && /^\d{2}$/.test(afterLastSep)) {
+        if (lastDot > lastComma) {
+          cleaned = cleaned.replace(/,/g, '');
+        } else {
+          cleaned = cleaned.replace(/\./g, '');
+          cleaned = cleaned.replace(',', '.');
+        }
+      } else {
+        cleaned = cleaned.replace(/[,\.]/g, '');
+      }
+      
+      const value = Number(cleaned);
+      return Math.round(value);
+    }
+
+    async function parsePDF(file) {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ 
+        data: arrayBuffer,
+        disableWorker: true
+      }).promise;
+      
+      let fullText = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map(item => item.str).join(' ');
+        fullText += pageText + '\n';
+      }
+      
+      return extractInvoiceData(fullText);
+    }
+
+    function extractInvoiceData(text) {
+      const invoiceMatch =
+        text.match(/\bINV[-\s:]*([A-Z0-9\-]*\d[A-Z0-9\-]*)\b/i) ||
+        text.match(/Invoice\s*(?:No|Number|#)?[:\s\-]*([A-Z0-9\-]*\d[A-Z0-9\-]*)/i);
+      
+      const invoiceNo = invoiceMatch ? invoiceMatch[1] : 'INV-' + Date.now();
+
+      const dateMatch = text.match(/(?:Tanggal Faktur)[:\s]*(\d{1,2}[\s\-\/]\d{1,2}[\s\-\/]\d{2,4})/i);
+      const invoiceDate = dateMatch ? dateMatch[1] : new Date().toLocaleDateString('id-ID');
+
+      const dueMatch = text.match(/(?:Jatuh Tempo)[:\s]*(\d{1,2}[\s\-\/]\d{1,2}[\s\-\/]\d{2,4})/i);
+      const dueDate = dueMatch ? dueMatch[1] : invoiceDate;
+
+      const termsMatch = text.match(/(?:Ketentuan)[:\s]*"?([^"\n]+)"?/i);
+      const terms = termsMatch ? termsMatch[1].trim() : '';
+
+      const sellerNameMatch = text.match(/(?:CV\.|PT\.|UD\.|Toko)\s+([A-Za-z\s]+?)(?=\s+Jl\.|Alamat|Telepon|\n)/i);
+      const sellerName = sellerNameMatch ? sellerNameMatch[0].trim() : 'Unknown Seller';
+
+      const addressMatch = text.match(/(?:Alamat[:\s]*|Jl\.\s)([^\n]+)/i);
+      const sellerAddress = addressMatch ? addressMatch[1].trim() : '';
+
+      const phoneMatch = text.match(/(?:Telepon|Phone|Tel)[:\s]*(\+?[\d\s\-]+)/i);
+      const sellerPhone = phoneMatch ? phoneMatch[1].trim() : '';
+
+      const emailMatch = text.match(/(?:Email)[:\s]*([\w\.\-]+@[\w\.\-]+)/i);
+      const sellerEmail = emailMatch ? emailMatch[1].trim() : '';
+
+      const buyerMatch = text.match(/(?:Ditagih ke|Bill to)[:\s]*([A-Za-z\s]+?)(?=\n|Item|Deskripsi)/i);
+      const buyerName = buyerMatch ? buyerMatch[1].trim() : 'Unknown Buyer';
+
+      const items = [];
+      const lines = text.split('\n');
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        
+        const itemMatch1 = line.match(/^([a-zA-Z][a-zA-Z\s]{2,}?)\s+(\d+(?:\.\d{2})?)\s+pcs\s+(\d{1,3}(?:[,\.]\d{3})*(?:\.\d{2})?)\s+(\d{1,3}(?:[,\.]\d{3})*(?:\.\d{2})?)/i);
+        
+        if (itemMatch1) {
+          const itemName = itemMatch1[1].trim();
+          const qty = parseFloat(itemMatch1[2]);
+          const rate = parseMoneyAuto(itemMatch1[3]);
+          const amount = parseMoneyAuto(itemMatch1[4]);
+          
+          if (qty > 0 && rate > 0 && amount > 0 && itemName.length >= 3) {
+            items.push({
+              name: itemName,
+              qty: qty,
+              unit: 'pcs',
+              rate: rate,
+              amount_printed: amount
+            });
+            continue;
+          }
+        }
+        
+        const itemMatch2 = line.match(/^([a-zA-Z][a-zA-Z\s]{2,}?)\s+(\d+(?:\.\d{2})?)\s+(\d{1,3}(?:[,\.]\d{3})*(?:\.\d{2})?)\s+(\d{1,3}(?:[,\.]\d{3})*(?:\.\d{2})?)/i);
+        
+        if (itemMatch2) {
+          const itemName = itemMatch2[1].trim();
+          const qty = parseFloat(itemMatch2[2]);
+          const rate = parseMoneyAuto(itemMatch2[3]);
+          const amount = parseMoneyAuto(itemMatch2[4]);
+          
+          if (qty > 0 && rate > 0 && amount > 0 && itemName.length >= 3) {
+            items.push({
+              name: itemName,
+              qty: qty,
+              unit: 'pcs',
+              rate: rate,
+              amount_printed: amount
+            });
+          }
+        }
+      }
+
+      let subtotalComputed = 0;
+      items.forEach(item => {
+        item.amount_computed = Math.round(item.qty * item.rate);
+        subtotalComputed += item.amount_computed;
+      });
+
+      const subtotalMatch = text.match(/(?:Sub Total)[:\s]*(?:IDR\s*)?(\d{1,3}(?:[,\.]\d{3})*(?:\.\d{2})?)/i);
+      const subtotalPrinted = subtotalMatch ? parseMoneyAuto(subtotalMatch[1]) : subtotalComputed;
+
+      const totalMatch = text.match(/(?:^Total)[:\s]*(?:IDR\s*)?(\d{1,3}(?:[,\.]\d{3})*(?:\.\d{2})?)/im);
+      const totalPrinted = totalMatch ? parseMoneyAuto(totalMatch[1]) : subtotalPrinted;
+
+      const balanceMatch = text.match(/(?:Saldo Jatuh Tempo)[:\s]*(?:IDR\s*)?(\d{1,3}(?:[,\.]\d{3})*(?:\.\d{2})?)/i);
+      const balanceDuePrinted = balanceMatch ? parseMoneyAuto(balanceMatch[1]) : totalPrinted;
+
+      const notesMatch = text.match(/(?:Terima kasih|Thank you)([^\n]*)/i);
+      const notes = notesMatch ? notesMatch[0].trim() : '';
+
+      const diff = Math.abs(subtotalComputed - subtotalPrinted);
+      const validationStatus = diff < 1 ? 'COCOK' : 'SELISIH';
+
+      const fingerprint = generateFingerprint(invoiceNo, invoiceDate, totalPrinted);
+
+      return {
+        invoice_no: invoiceNo,
+        invoice_date: invoiceDate,
+        due_date: dueDate,
+        terms: terms,
+        seller_name: sellerName,
+        seller_address: sellerAddress,
+        seller_phone: sellerPhone,
+        seller_email: sellerEmail,
+        buyer_name: buyerName,
+        items: JSON.stringify(items),
+        subtotal_printed: subtotalPrinted,
+        total_printed: totalPrinted,
+        balance_due_printed: balanceDuePrinted,
+        subtotal_computed: subtotalComputed,
+        diff: diff,
+        validation_status: validationStatus,
+        fingerprint: fingerprint,
+        notes: notes,
+        total_paid: 0,
+        remaining: totalPrinted,
+        payment_status: 'BELUM',
+        uploaded_at: new Date().toISOString()
+      };
+    }
+
+    async function handleFileUpload(files) {
+      if (!files || files.length === 0) {
+        showToast('Silakan pilih file PDF yang valid', 'error');
+        return;
+      }
+
+      const isPdfFile = (file) => {
+        const name = (file?.name || '').toLowerCase();
+        const type = (file?.type || '').toLowerCase();
+
+        // Some browsers/OS return empty or generic MIME for PDFs, so we also check extension.
+        return type === 'application/pdf' || type === 'application/x-pdf' || name.endsWith('.pdf');
+      };
+
+      const pdfFiles = Array.from(files).filter(isPdfFile);
+if (pdfFiles.length === 0) {
+        console.warn('[Upload] Tidak ada PDF terdeteksi. Detail file:', Array.from(files).map(f => ({name: f.name, type: f.type, size: f.size})));
+
+        showToast('Tidak ada file PDF yang valid', 'error');
+        return;
+      }
+
+      if (pdfFiles.length > 100) {
+        showToast('Maksimal 100 file per upload', 'error');
+        return;
+      }
+
+      if (invoices.length + pdfFiles.length > 999) {
+        showToast(`Batas maksimum 999 invoice. Anda hanya bisa upload ${999 - invoices.length} file lagi.`, 'error');
+        return;
+      }
+
+      const loadingState = document.getElementById('loadingState');
+      const fileInput = document.getElementById('fileInput');
+      const progressBar = document.getElementById('progressBar');
+      const loadingProgress = document.getElementById('loadingProgress');
+      
+      loadingState.classList.remove('hidden');
+
+      let successCount = 0;
+      let duplicateCount = 0;
+      let errorCount = 0;
+
+      try {
+        for (let i = 0; i < pdfFiles.length; i++) {
+          const file = pdfFiles[i];
+          const progress = Math.round(((i + 1) / pdfFiles.length) * 100);
+          
+          progressBar.style.width = `${progress}%`;
+          loadingProgress.textContent = `Memproses ${i + 1} dari ${pdfFiles.length} file...`;
+
+          try {
+            const invoiceData = await parsePDF(file);
+            
+            if (checkDuplicate(invoiceData.fingerprint)) {
+              duplicateCount++;
+              continue;
+            }
+            
+            invoiceData.__pdfFile = file;
+             invoiceData.original_filename = file.name;
+             invoiceData.file_size = file.size;
+             const result = await window.dataSdk.create(invoiceData);
+            
+            if (result.isOk) {
+              successCount++;
+            } else {
+              errorCount++;
+            }
+          } catch (error) {
+            errorCount++;
+          }
+        }
+
+        let message = `✅ Upload selesai: ${successCount} berhasil`;
+        if (duplicateCount > 0) message += `, ${duplicateCount} duplikat`;
+        if (errorCount > 0) message += `, ${errorCount} gagal`;
+        
+        showToast(message, successCount > 0 ? 'success' : 'error');
+
+      } finally {
+        loadingState.classList.add('hidden');
+        progressBar.style.width = '0%';
+        fileInput.value = '';
+      }
+    }
+
+    function populateMonthArchive() {
+      const monthSelect = document.getElementById('monthArchive');
+      const monthsMap = new Map();
+
+      invoices.forEach(inv => {
+        const date = parseInvoiceDate(inv.invoice_date);
+        if (date) {
+          const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+          const monthName = date.toLocaleDateString('id-ID', { year: 'numeric', month: 'long' });
+          
+          if (!monthsMap.has(monthKey)) {
+            monthsMap.set(monthKey, {
+              key: monthKey,
+              name: monthName,
+              count: 0
+            });
+          }
+          monthsMap.get(monthKey).count++;
+        }
+      });
+
+      const sortedMonths = Array.from(monthsMap.values()).sort((a, b) => b.key.localeCompare(a.key));
+
+      const currentOptions = Array.from(monthSelect.options).slice(1).map(opt => opt.value);
+      const newOptions = sortedMonths.map(m => m.key);
+
+      if (JSON.stringify(currentOptions) !== JSON.stringify(newOptions)) {
+        while (monthSelect.options.length > 1) {
+          monthSelect.remove(1);
+        }
+
+        sortedMonths.forEach(month => {
+          const option = document.createElement('option');
+          option.value = month.key;
+          option.textContent = `📅 ${month.name} (${month.count} invoice)`;
+          monthSelect.appendChild(option);
+        });
+      }
+
+      if (selectedMonthArchive) {
+        monthSelect.value = selectedMonthArchive;
+      }
+    }
+
+    function renderInvoiceList() {
+      const container = document.getElementById('invoiceList');
+      const emptyState = document.getElementById('emptyState');
+      const paginationContainer = document.getElementById('paginationContainer');
+      const monthArchiveInfo = document.getElementById('monthArchiveInfo');
+
+      let filteredInvoices = invoices;
+      
+      if (currentFilter === 'match') {
+        filteredInvoices = invoices.filter(inv => inv.validation_status === 'COCOK');
+      } else if (currentFilter === 'mismatch') {
+        filteredInvoices = invoices.filter(inv => inv.validation_status === 'SELISIH');
+      } else if (currentFilter === 'paid') {
+        filteredInvoices = invoices.filter(inv => inv.payment_status === 'LUNAS');
+      } else if (currentFilter === 'unpaid') {
+        filteredInvoices = invoices.filter(inv => inv.payment_status !== 'LUNAS');
+      }
+
+      if (selectedMonthArchive) {
+        const [year, month] = selectedMonthArchive.split('-').map(Number);
+        filteredInvoices = filteredInvoices.filter(inv => {
+          const date = parseInvoiceDate(inv.invoice_date);
+          if (!date) return false;
+          return date.getFullYear() === year && date.getMonth() + 1 === month;
+        });
+
+        const monthName = new Date(year, month - 1).toLocaleDateString('id-ID', { year: 'numeric', month: 'long' });
+        monthArchiveInfo.textContent = `Menampilkan: ${monthName} (${filteredInvoices.length} invoice)`;
+      } else {
+        monthArchiveInfo.textContent = '';
+      }
+
+      if (dateFromFilter || dateToFilter) {
+        filteredInvoices = filteredInvoices.filter(inv => {
+          const invoiceDate = parseInvoiceDate(inv.invoice_date);
+          if (!invoiceDate) return true;
+          
+          if (dateFromFilter && invoiceDate < dateFromFilter) return false;
+          if (dateToFilter && invoiceDate > dateToFilter) return false;
+          
+          return true;
+        });
+      }
+
+      updateSummaryTotals(filteredInvoices);
+      updateDateRangeInfo();
+
+      if (filteredInvoices.length === 0) {
+        emptyState.classList.remove('hidden');
+        paginationContainer.classList.add('hidden');
+        container.querySelectorAll('.invoice-card').forEach(card => card.remove());
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+
+      const totalPages = Math.ceil(filteredInvoices.length / itemsPerPage);
+      const startIndex = (currentPage - 1) * itemsPerPage;
+      const endIndex = Math.min(startIndex + itemsPerPage, filteredInvoices.length);
+      const paginatedInvoices = filteredInvoices.slice(startIndex, endIndex);
+
+      if (filteredInvoices.length > itemsPerPage) {
+        paginationContainer.classList.remove('hidden');
+        document.getElementById('showingStart').textContent = startIndex + 1;
+        document.getElementById('showingEnd').textContent = endIndex;
+        document.getElementById('totalItems').textContent = filteredInvoices.length;
+
+        document.getElementById('prevPage').disabled = currentPage === 1;
+        document.getElementById('nextPage').disabled = currentPage === totalPages;
+
+        renderPageNumbers(currentPage, totalPages);
+      } else {
+        paginationContainer.classList.add('hidden');
+      }
+
+      const existingCards = new Map();
+      container.querySelectorAll('.invoice-card').forEach(card => {
+        existingCards.set(card.dataset.id, card);
+      });
+
+      existingCards.forEach(card => card.remove());
+
+      paginatedInvoices.forEach(invoice => {
+        const newCard = createInvoiceCard(invoice);
+        container.appendChild(newCard);
+      });
+    }
+
+    function renderPageNumbers(current, total) {
+      const container = document.getElementById('pageNumbers');
+      container.innerHTML = '';
+
+      let startPage = Math.max(1, current - 2);
+      let endPage = Math.min(total, current + 2);
+
+      if (current <= 3) {
+        endPage = Math.min(5, total);
+      }
+      if (current >= total - 2) {
+        startPage = Math.max(1, total - 4);
+      }
+
+      if (startPage > 1) {
+        const btn = createPageButton(1, current);
+        container.appendChild(btn);
+        if (startPage > 2) {
+          const dots = document.createElement('span');
+          dots.className = 'px-3 py-2 text-gray-500';
+          dots.textContent = '...';
+          container.appendChild(dots);
+        }
+      }
+
+      for (let i = startPage; i <= endPage; i++) {
+        const btn = createPageButton(i, current);
+        container.appendChild(btn);
+      }
+
+      if (endPage < total) {
+        if (endPage < total - 1) {
+          const dots = document.createElement('span');
+          dots.className = 'px-3 py-2 text-gray-500';
+          dots.textContent = '...';
+          container.appendChild(dots);
+        }
+        const btn = createPageButton(total, current);
+        container.appendChild(btn);
+      }
+    }
+
+    function createPageButton(pageNum, currentPage) {
+      const btn = document.createElement('button');
+      btn.className = `px-5 py-3 font-bold rounded-xl transition-all duration-200 ${
+        pageNum === currentPage
+          ? 'bg-blue-600 text-white shadow-lg'
+          : 'bg-gray-100 hover:bg-gray-200 text-gray-700 shadow-md'
+      }`;
+      btn.textContent = pageNum;
+      btn.onclick = () => goToPage(pageNum);
+      return btn;
+    }
+
+    function goToPage(page) {
+      currentPage = page;
+      renderInvoiceList();
+      document.getElementById('invoiceList').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function parseInvoiceDate(dateStr) {
+      const parts = dateStr.split(/[\s\-\/]/);
+      if (parts.length >= 3) {
+        const day = parseInt(parts[0]);
+        const month = parseInt(parts[1]) - 1;
+        const year = parseInt(parts[2]);
+        
+        const fullYear = year < 100 ? (year > 50 ? 1900 + year : 2000 + year) : year;
+        
+        const date = new Date(fullYear, month, day);
+        if (!isNaN(date.getTime())) {
+          return date;
+        }
+      }
+      return null;
+    }
+
+    function updateDateRangeInfo() {
+      const info = document.getElementById('dateRangeInfo');
+      if (!dateFromFilter && !dateToFilter) {
+        info.textContent = '';
+        return;
+      }
+      
+      const formatDate = (date) => {
+        return date.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+      };
+      
+      if (dateFromFilter && dateToFilter) {
+        info.textContent = `📅 ${formatDate(dateFromFilter)} — ${formatDate(dateToFilter)}`;
+      } else if (dateFromFilter) {
+        info.textContent = `📅 Dari ${formatDate(dateFromFilter)}`;
+      } else if (dateToFilter) {
+        info.textContent = `📅 Sampai ${formatDate(dateToFilter)}`;
+      }
+    }
+
+    function updateSummaryTotals(filteredInvoices) {
+      const totalInvoice = filteredInvoices.reduce((sum, inv) => sum + inv.total_printed, 0);
+      const totalPaid = filteredInvoices.reduce((sum, inv) => sum + inv.total_paid, 0);
+      const totalRemaining = filteredInvoices.reduce((sum, inv) => sum + inv.remaining, 0);
+
+      document.getElementById('summaryTotalInvoice').textContent = `Rp ${totalInvoice.toLocaleString('id-ID')}`;
+      document.getElementById('summaryTotalPaid').textContent = `Rp ${totalPaid.toLocaleString('id-ID')}`;
+      document.getElementById('summaryTotalRemaining').textContent = `Rp ${totalRemaining.toLocaleString('id-ID')}`;
+    }
+
+    function createInvoiceCard(invoice) {
+      const card = document.createElement('div');
+      card.className = 'invoice-card glass-card border-3 border-blue-200 rounded-2xl shadow-xl';
+      card.dataset.id = invoice.__backendId;
+      
+      updateInvoiceCard(card, invoice);
+      
+      return card;
+    }
+
+    function updateInvoiceCard(card, invoice) {
+      const validationColor = invoice.validation_status === 'COCOK' ? 'green' : 'red';
+      const validationIcon = invoice.validation_status === 'COCOK' ? '✓' : '✗';
+      
+      let paymentColor = 'gray';
+      let paymentText = 'BELUM';
+      if (invoice.payment_status === 'LUNAS') {
+        paymentColor = 'green';
+        paymentText = '✓ LUNAS';
+      } else if (invoice.payment_status === 'SEBAGIAN') {
+        paymentColor = 'yellow';
+        paymentText = '◐ SEBAGIAN';
+      }
+
+      card.innerHTML = `
+        <div class="p-7">
+          <div class="flex items-start justify-between mb-5">
+            <div class="flex-1">
+              <div class="flex items-center gap-3 mb-3">
+                <h3 class="text-3xl font-extrabold text-gray-900">${invoice.invoice_no}</h3>
+                <span class="px-4 py-2 bg-${validationColor}-100 text-${validationColor}-700 font-bold rounded-xl text-base shadow-md">
+                  ${validationIcon} ${invoice.validation_status}
+                </span>
+                <span class="payment-badge bg-${paymentColor}-100 text-${paymentColor}-700 shadow-md">
+                  ${paymentText}
+                </span>
+              </div>
+              <div class="grid grid-cols-2 gap-x-8 gap-y-2 text-base text-gray-700 mb-4 font-medium">
+                <div>📅 Tanggal: <span class="font-bold text-gray-900">${invoice.invoice_date}</span></div>
+                <div>⏰ Jatuh Tempo: <span class="font-bold text-gray-900">${invoice.due_date}</span></div>
+                <div>🏢 Penjual: <span class="font-bold text-gray-900">${invoice.seller_name}</span></div>
+                <div>👤 Pembeli: <span class="font-bold text-gray-900">${invoice.buyer_name}</span></div>
+              </div>
+            </div>
+            <div class="flex gap-3">
+              <button onclick="viewDetail('${invoice.__backendId}')" class="px-6 py-3 bg-blue-100 hover:bg-blue-200 text-blue-800 font-bold rounded-xl transition-all duration-200 shadow-md hover:shadow-lg">
+                📋 Detail
+              </button>
+              <button onclick="openPaymentModal('${invoice.__backendId}')" class="px-6 py-3 bg-green-100 hover:bg-green-200 text-green-800 font-bold rounded-xl transition-all duration-200 shadow-md hover:shadow-lg">
+                💰 Bayar
+              </button>
+              <button onclick="deleteInvoice('${invoice.__backendId}')" class="px-6 py-3 bg-red-100 hover:bg-red-200 text-red-800 font-bold rounded-xl transition-all duration-200 shadow-md hover:shadow-lg">
+                🗑️ Hapus
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-4 gap-5">
+            <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-5 rounded-xl shadow-md border-2 border-blue-200">
+              <p class="text-xs text-gray-600 mb-2 font-bold">Total Invoice</p>
+              <p class="text-xl font-extrabold text-gray-900">Rp ${invoice.total_printed.toLocaleString('id-ID')}</p>
+            </div>
+            <div class="bg-gradient-to-br from-green-50 to-green-100 p-5 rounded-xl shadow-md border-2 border-green-200">
+              <p class="text-xs text-gray-600 mb-2 font-bold">Sudah Dibayar</p>
+              <p class="text-xl font-extrabold text-green-700">Rp ${invoice.total_paid.toLocaleString('id-ID')}</p>
+            </div>
+            <div class="bg-gradient-to-br from-orange-50 to-orange-100 p-5 rounded-xl shadow-md border-2 border-orange-200">
+              <p class="text-xs text-gray-600 mb-2 font-bold">Sisa Tagihan</p>
+              <p class="text-xl font-extrabold text-orange-700">Rp ${invoice.remaining.toLocaleString('id-ID')}</p>
+            </div>
+            <div class="bg-gradient-to-br from-purple-50 to-purple-100 p-5 rounded-xl shadow-md border-2 border-purple-200">
+              <p class="text-xs text-gray-600 mb-2 font-bold">Validasi Hitung</p>
+              <p class="text-xl font-extrabold ${validationColor === 'green' ? 'text-green-700' : 'text-red-700'}">
+                ${invoice.validation_status === 'COCOK' ? 'Cocok ✓' : 'Selisih Rp ' + invoice.diff.toLocaleString('id-ID')}
+              </p>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    window.viewDetail = function(id) {
+      const invoice = invoices.find(inv => inv.__backendId === id);
+      if (!invoice) return;
+
+      const items = JSON.parse(invoice.items);
+      const modal = document.getElementById('detailModal');
+      const content = document.getElementById('modalContent');
+
+      const validationColor = invoice.validation_status === 'COCOK' ? 'green' : 'red';
+      const validationIcon = invoice.validation_status === 'COCOK' ? '✓' : '✗';
+
+      content.innerHTML = `
+        <div class="grid grid-cols-2 gap-6 mb-6">
+          <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-2xl shadow-lg border-2 border-blue-200">
+            <h4 class="text-xl font-extrabold text-gray-900 mb-4 flex items-center gap-2">
+              <span class="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+              </span>
+              Informasi Invoice
+            </h4>
+            <div class="space-y-3 text-sm">
+              <div class="flex justify-between">
+                <span class="text-gray-600 font-semibold">Invoice No:</span>
+                <span class="font-extrabold text-gray-900">${invoice.invoice_no}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-600 font-semibold">Tanggal Faktur:</span>
+                <span class="font-extrabold text-gray-900">${invoice.invoice_date}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-600 font-semibold">Jatuh Tempo:</span>
+                <span class="font-extrabold text-gray-900">${invoice.due_date}</span>
+              </div>
+              ${invoice.terms ? `
+              <div class="flex justify-between">
+                <span class="text-gray-600 font-semibold">Ketentuan:</span>
+                <span class="font-extrabold text-gray-900">${invoice.terms}</span>
+              </div>
+              ` : ''}
+            </div>
+          </div>
+
+          <div class="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-2xl shadow-lg border-2 border-green-200">
+            <h4 class="text-xl font-extrabold text-gray-900 mb-4 flex items-center gap-2">
+              <span class="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                </svg>
+              </span>
+              Penjual & Pembeli
+            </h4>
+            <div class="space-y-4 text-sm">
+              <div>
+                <p class="text-gray-600 mb-2 font-bold">Penjual:</p>
+                <p class="font-extrabold text-gray-900">${invoice.seller_name}</p>
+                ${invoice.seller_address ? `<p class="text-gray-600 text-xs mt-1">${invoice.seller_address}</p>` : ''}
+                ${invoice.seller_phone ? `<p class="text-gray-600 text-xs">☎ ${invoice.seller_phone}</p>` : ''}
+                ${invoice.seller_email ? `<p class="text-gray-600 text-xs">✉ ${invoice.seller_email}</p>` : ''}
+              </div>
+              <div class="border-t-2 border-green-300 pt-3">
+                <p class="text-gray-600 mb-2 font-bold">Pembeli:</p>
+                <p class="font-extrabold text-gray-900">${invoice.buyer_name}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mb-6">
+          <h4 class="text-xl font-extrabold text-gray-900 mb-4 flex items-center gap-2">
+            <span class="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
+              <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+              </svg>
+            </span>
+            Detail Item
+          </h4>
+          <div class="overflow-x-auto bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-5 shadow-lg border-2 border-gray-200">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b-3 border-gray-400">
+                  <th class="px-4 py-4 text-left font-extrabold text-gray-800">Item & Deskripsi</th>
+                  <th class="px-4 py-4 text-right font-extrabold text-gray-800">Qty</th>
+                  <th class="px-4 py-4 text-right font-extrabold text-gray-800">Harga Satuan</th>
+                  <th class="px-4 py-4 text-right font-extrabold text-gray-800">Amount (Printed)</th>
+                  <th class="px-4 py-4 text-right font-extrabold text-gray-800">Amount (Computed)</th>
+                  <th class="px-4 py-4 text-center font-extrabold text-gray-800">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${items.map(item => {
+                  const isMatch = Math.abs(item.amount_computed - item.amount_printed) < 1;
+                  return `
+                    <tr class="item-row border-t-2 border-gray-200">
+                      <td class="px-4 py-4 text-gray-900 font-bold">${item.name}</td>
+                      <td class="px-4 py-4 text-right text-gray-900 font-semibold">${item.qty} ${item.unit}</td>
+                      <td class="px-4 py-4 text-right text-gray-900 font-semibold">Rp ${item.rate.toLocaleString('id-ID')}</td>
+                      <td class="px-4 py-4 text-right text-gray-900 font-semibold">Rp ${item.amount_printed.toLocaleString('id-ID')}</td>
+                      <td class="px-4 py-4 text-right font-extrabold ${isMatch ? 'text-green-700' : 'text-red-700'}">
+                        Rp ${item.amount_computed.toLocaleString('id-ID')}
+                      </td>
+                      <td class="px-4 py-4 text-center">
+                        ${isMatch ? '<span class="text-green-600 font-extrabold text-xl">✓</span>' : '<span class="text-red-600 font-extrabold text-xl">✗</span>'}
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+              <tfoot>
+                <tr class="border-t-3 border-gray-500 font-extrabold">
+                  <td colspan="3" class="px-4 py-4 text-right text-gray-900 text-base">SUBTOTAL:</td>
+                  <td class="px-4 py-4 text-right text-gray-900 text-base">Rp ${invoice.subtotal_printed.toLocaleString('id-ID')}</td>
+                  <td class="px-4 py-4 text-right text-base ${validationColor === 'green' ? 'text-green-700' : 'text-red-700'}">
+                    Rp ${invoice.subtotal_computed.toLocaleString('id-ID')}
+                  </td>
+                  <td class="px-4 py-4 text-center">
+                    <span class="px-4 py-2 bg-${validationColor}-100 text-${validationColor}-700 font-extrabold rounded-xl text-sm shadow-md">
+                      ${validationIcon} ${invoice.validation_status}
+                    </span>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-6">
+          <div class="bg-gradient-to-br from-purple-50 to-purple-100 border-3 border-purple-300 rounded-2xl p-6 shadow-lg">
+            <h4 class="text-xl font-extrabold text-gray-900 mb-5 flex items-center gap-2">
+              <span class="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">🧮</span>
+              Validasi Perhitungan
+            </h4>
+            <div class="space-y-4">
+              <div class="flex justify-between text-sm">
+                <span class="text-gray-700 font-bold">Subtotal (Printed):</span>
+                <span class="font-extrabold text-gray-900">Rp ${invoice.subtotal_printed.toLocaleString('id-ID')}</span>
+              </div>
+              <div class="flex justify-between text-sm">
+                <span class="text-gray-700 font-bold">Subtotal (Computed):</span>
+                <span class="font-extrabold text-gray-900">Rp ${invoice.subtotal_computed.toLocaleString('id-ID')}</span>
+              </div>
+              <div class="flex justify-between text-sm border-t-2 border-purple-300 pt-4">
+                <span class="text-gray-700 font-bold">Total Invoice:</span>
+                <span class="font-extrabold text-gray-900">Rp ${invoice.total_printed.toLocaleString('id-ID')}</span>
+              </div>
+              ${invoice.diff > 0 ? `
+              <div class="bg-red-100 border-2 border-red-400 rounded-xl p-4 mt-4">
+                <p class="text-sm text-red-700 font-bold">⚠️ Selisih Terdeteksi:</p>
+                <p class="text-2xl font-extrabold text-red-700">Rp ${invoice.diff.toLocaleString('id-ID')}</p>
+              </div>
+              ` : `
+              <div class="bg-green-100 border-2 border-green-400 rounded-xl p-4 mt-4 text-center">
+                <p class="text-xl font-extrabold text-green-700">✓ Perhitungan 100% Cocok</p>
+              </div>
+              `}
+            </div>
+          </div>
+
+          <div class="bg-gradient-to-br from-green-50 to-green-100 border-3 border-green-300 rounded-2xl p-6 shadow-lg">
+            <h4 class="text-xl font-extrabold text-gray-900 mb-5 flex items-center gap-2">
+              <span class="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">💰</span>
+              Status Pembayaran
+            </h4>
+            <div class="space-y-4">
+              <div class="flex justify-between text-sm">
+                <span class="text-gray-700 font-bold">Total Tagihan:</span>
+                <span class="font-extrabold text-gray-900">Rp ${invoice.total_printed.toLocaleString('id-ID')}</span>
+              </div>
+              <div class="flex justify-between text-sm">
+                <span class="text-gray-700 font-bold">Sudah Dibayar:</span>
+                <span class="font-extrabold text-green-700">Rp ${invoice.total_paid.toLocaleString('id-ID')}</span>
+              </div>
+              <div class="flex justify-between text-sm border-t-2 border-green-300 pt-4">
+                <span class="text-gray-700 font-bold">Sisa Tagihan:</span>
+                <span class="font-extrabold text-orange-700">Rp ${invoice.remaining.toLocaleString('id-ID')}</span>
+              </div>
+              <div class="bg-white border-2 border-green-400 rounded-xl p-4 mt-4 text-center">
+                ${invoice.payment_status === 'LUNAS' 
+                  ? '<p class="text-xl font-extrabold text-green-700">✓ LUNAS</p>'
+                  : invoice.payment_status === 'SEBAGIAN'
+                  ? '<p class="text-xl font-extrabold text-yellow-700">◐ DIBAYAR SEBAGIAN</p>'
+                  : '<p class="text-xl font-extrabold text-gray-700">BELUM DIBAYAR</p>'
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+
+        ${invoice.notes ? `
+        <div class="mt-6 bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-300 rounded-2xl p-5 shadow-md">
+          <p class="text-sm text-gray-700 font-medium"><em>${invoice.notes}</em></p>
+        </div>
+        ` : ''}
+      `;
+
+      modal.classList.remove('hidden');
+    };
+
+    window.openPaymentModal = function(id) {
+      const invoice = invoices.find(inv => inv.__backendId === id);
+      if (!invoice) return;
+
+      currentInvoiceForPayment = invoice;
+      
+      document.getElementById('paymentInvoiceNo').value = invoice.invoice_no;
+      document.getElementById('paymentAmount').value = '';
+      document.getElementById('paymentMethod').value = 'Cash';
+      document.getElementById('remainingInfo').textContent = `Sisa tagihan: Rp ${invoice.remaining.toLocaleString('id-ID')}`;
+      
+      document.getElementById('paymentModal').classList.remove('hidden');
+    };
+
+    window.savePayment = async function() {
+      if (!currentInvoiceForPayment) return;
+
+      const amount = parseRupiah(document.getElementById('paymentAmount').value);
+      
+      
+      if (amount <= 0) {
+        showToast('Masukkan jumlah pembayaran yang valid', 'error');
+        return;
+      }
+
+      if (amount > currentInvoiceForPayment.remaining) {
+        showToast('Jumlah pembayaran melebihi sisa tagihan', 'error');
+        return;
+      }
+
+      const newTotalPaid = Math.round(currentInvoiceForPayment.total_paid + amount);
+      let newRemaining = Math.round(currentInvoiceForPayment.total_printed - newTotalPaid);
+      
+      if (newRemaining <= 0) {
+        newRemaining = 0;
+      }
+      
+      let newPaymentStatus = 'SEBAGIAN';
+      if (newRemaining === 0) {
+        newPaymentStatus = 'LUNAS';
+      } else if (newTotalPaid === 0) {
+        newPaymentStatus = 'BELUM';
+      }
+
+      const updatedInvoice = {
+        ...currentInvoiceForPayment,
+        total_paid: newTotalPaid,
+        remaining: newRemaining,
+        payment_status: newPaymentStatus
+      };
+
+      const result = await window.dataSdk.update(updatedInvoice);
+      
+      if (result.isOk) {
+        showToast('✅ Pembayaran berhasil dicatat!', 'success');
+        document.getElementById('paymentModal').classList.add('hidden');
+        currentInvoiceForPayment = null;
+      } else {
+        showToast('Gagal menyimpan pembayaran', 'error');
+      }
+    };
+
+    document.getElementById('savePayment').addEventListener('click', savePayment);
+
+    document.getElementById('closePaymentModal').addEventListener('click', () => {
+      document.getElementById('paymentModal').classList.add('hidden');
+      currentInvoiceForPayment = null;
+    });
+
+    document.getElementById('payAllBtn').addEventListener('click', () => {
+      let unpaidInvoices = invoices;
+      
+      if (currentFilter === 'match') {
+        unpaidInvoices = invoices.filter(inv => inv.validation_status === 'COCOK');
+      } else if (currentFilter === 'mismatch') {
+        unpaidInvoices = invoices.filter(inv => inv.validation_status === 'SELISIH');
+      } else if (currentFilter === 'paid') {
+        unpaidInvoices = invoices.filter(inv => inv.payment_status === 'LUNAS');
+      } else if (currentFilter === 'unpaid') {
+        unpaidInvoices = invoices.filter(inv => inv.payment_status !== 'LUNAS');
+      }
+      
+      unpaidInvoices = unpaidInvoices.filter(inv => inv.remaining > 0);
+      
+      if (unpaidInvoices.length === 0) {
+        showToast('Tidak ada invoice yang perlu dibayar', 'error');
+        return;
+      }
+
+      const totalAmount = unpaidInvoices.reduce((sum, inv) => sum + inv.remaining, 0);
+      
+      document.getElementById('payAllCount').textContent = `${unpaidInvoices.length} invoice`;
+      document.getElementById('payAllTotalAmount').textContent = `Rp ${totalAmount.toLocaleString('id-ID')}`;
+      document.getElementById('payAllMethod').value = 'Transfer Bank';
+      document.getElementById('payAllAmountInput').value = '';
+      document.getElementById('payAllAmountInput').max = totalAmount;
+      document.getElementById('payAllRemainingInfo').textContent = `Total sisa tagihan: Rp ${totalAmount.toLocaleString('id-ID')}`;
+      
+      const listContainer = document.getElementById('payAllInvoiceList');
+      listContainer.innerHTML = unpaidInvoices.map(inv => `
+        <div class="flex items-center justify-between p-5 border-b-2 border-gray-200 last:border-b-0">
+          <div class="flex-1">
+            <p class="font-extrabold text-gray-900">${inv.invoice_no}</p>
+            <p class="text-sm text-gray-600 font-medium">${inv.buyer_name}</p>
+          </div>
+          <div class="text-right">
+            <p class="text-sm text-gray-600 font-bold">Sisa Tagihan</p>
+            <p class="font-extrabold text-green-700 text-lg">Rp ${inv.remaining.toLocaleString('id-ID')}</p>
+          </div>
+        </div>
+      `).join('');
+      
+      document.getElementById('payAllModal').classList.remove('hidden');
+    });
+
+    document.getElementById('confirmPayAll').addEventListener('click', async () => {
+      let unpaidInvoices = invoices;
+      
+      if (currentFilter === 'match') {
+        unpaidInvoices = invoices.filter(inv => inv.validation_status === 'COCOK');
+      } else if (currentFilter === 'mismatch') {
+        unpaidInvoices = invoices.filter(inv => inv.validation_status === 'SELISIH');
+      } else if (currentFilter === 'paid') {
+        unpaidInvoices = invoices.filter(inv => inv.payment_status === 'LUNAS');
+      } else if (currentFilter === 'unpaid') {
+        unpaidInvoices = invoices.filter(inv => inv.payment_status !== 'LUNAS');
+      }
+      
+      unpaidInvoices = unpaidInvoices.filter(inv => inv.remaining > 0);
+      
+      if (unpaidInvoices.length === 0) {
+        document.getElementById('payAllModal').classList.add('hidden');
+        return;
+      }
+
+      const paymentAmount = parseRupiah(document.getElementById('payAllAmountInput').value);
+      
+      
+      if (paymentAmount <= 0) {
+        showToast('Masukkan jumlah pembayaran yang valid', 'error');
+        return;
+      }
+
+      const totalRemaining = unpaidInvoices.reduce((sum, inv) => sum + inv.remaining, 0);
+      
+      if (paymentAmount > totalRemaining) {
+        showToast('Jumlah pembayaran melebihi total sisa tagihan', 'error');
+        return;
+      }
+
+      const confirmBtn = document.getElementById('confirmPayAll');
+      const originalText = confirmBtn.textContent;
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = 'Memproses...';
+      confirmBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+      let remainingPayment = paymentAmount;
+      let successCount = 0;
+      let errorCount = 0;
+      let fullyPaidCount = 0;
+      let partiallyPaidCount = 0;
+
+      const sortedInvoices = [...unpaidInvoices].sort((a, b) => a.remaining - b.remaining);
+
+      for (const invoice of sortedInvoices) {
+        if (remainingPayment <= 0) break;
+
+        const amountToPay = Math.min(remainingPayment, invoice.remaining);
+        const newTotalPaid = Math.round(invoice.total_paid + amountToPay);
+        const newRemaining = Math.round(invoice.remaining - amountToPay);
+        
+        let newPaymentStatus = 'SEBAGIAN';
+        if (newRemaining === 0) {
+          newPaymentStatus = 'LUNAS';
+          fullyPaidCount++;
+        } else if (newTotalPaid === 0) {
+          newPaymentStatus = 'BELUM';
+        } else {
+          partiallyPaidCount++;
+        }
+
+        const updatedInvoice = {
+          ...invoice,
+          total_paid: newTotalPaid,
+          remaining: newRemaining,
+          payment_status: newPaymentStatus
+        };
+
+        const result = await window.dataSdk.update(updatedInvoice);
+        
+        if (result.isOk) {
+          successCount++;
+          remainingPayment -= amountToPay;
+        } else {
+          errorCount++;
+        }
+      }
+
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = originalText;
+      confirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+      document.getElementById('payAllModal').classList.add('hidden');
+
+      if (errorCount === 0) {
+        let message = `✅ Pembayaran Rp ${paymentAmount.toLocaleString('id-ID')} berhasil dialokasikan!`;
+        if (fullyPaidCount > 0) {
+          message += ` ${fullyPaidCount} invoice lunas`;
+        }
+        if (partiallyPaidCount > 0) {
+          message += ` ${partiallyPaidCount > 0 && fullyPaidCount > 0 ? ',' : ''} ${partiallyPaidCount} invoice dibayar sebagian`;
+        }
+        showToast(message, 'success');
+      } else {
+        showToast(`⚠️ Berhasil: ${successCount}, Gagal: ${errorCount}`, 'error');
+      }
+    });
+
+    document.getElementById('closePayAllModal').addEventListener('click', () => {
+      document.getElementById('payAllModal').classList.add('hidden');
+    });
+
+    document.getElementById('resetAllBtn').addEventListener('click', () => {
+      if (invoices.length === 0) {
+        showToast('Tidak ada data untuk dihapus', 'error');
+        return;
+      }
+      
+      document.getElementById('resetCount').textContent = `${invoices.length} invoice`;
+      document.getElementById('resetModal').classList.remove('hidden');
+    });
+
+    document.getElementById('confirmReset').addEventListener('click', async () => {
+      if (invoices.length === 0) {
+        document.getElementById('resetModal').classList.add('hidden');
+        return;
+      }
+
+      const resetBtn = document.getElementById('confirmReset');
+      const originalText = resetBtn.textContent;
+      resetBtn.disabled = true;
+      resetBtn.textContent = 'Menghapus...';
+      resetBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+      let deletedCount = 0;
+      let errorCount = 0;
+
+      for (const invoice of invoices) {
+        const result = await window.dataSdk.delete(invoice);
+        if (result.isOk) {
+          deletedCount++;
+        } else {
+          errorCount++;
+        }
+      }
+
+      resetBtn.disabled = false;
+      resetBtn.textContent = originalText;
+      resetBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+      document.getElementById('resetModal').classList.add('hidden');
+
+      if (errorCount === 0) {
+        showToast(`✅ Berhasil menghapus ${deletedCount} invoice`, 'success');
+      } else {
+        showToast(`⚠️ Dihapus: ${deletedCount}, Gagal: ${errorCount}`, 'error');
+      }
+    });
+
+    document.getElementById('cancelReset').addEventListener('click', () => {
+      document.getElementById('resetModal').classList.add('hidden');
+    });
+
+    window.deleteInvoice = async function(id) {
+      const invoice = invoices.find(inv => inv.__backendId === id);
+      if (!invoice) return;
+
+      const card = document.querySelector(`[data-id="${id}"]`);
+      const originalContent = card.innerHTML;
+      
+      card.innerHTML = `
+        <div class="text-center py-10">
+          <p class="text-xl font-extrabold text-gray-900 mb-6">Hapus invoice ${invoice.invoice_no}?</p>
+          <div class="flex gap-4 justify-center">
+            <button onclick="confirmDelete('${id}')" class="px-8 py-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-2xl transition-all duration-200 shadow-lg">
+              Ya, Hapus
+            </button>
+            <button onclick="cancelDelete('${id}', \`${originalContent.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)" class="px-8 py-4 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-2xl transition-all duration-200 shadow-lg">
+              Batal
+            </button>
+          </div>
+        </div>
+      `;
+    };
+
+    window.confirmDelete = async function(id) {
+      const invoice = invoices.find(inv => inv.__backendId === id);
+      if (!invoice) return;
+
+      const result = await window.dataSdk.delete(invoice);
+      
+      if (result.isOk) {
+        showToast('Invoice berhasil dihapus', 'success');
+      } else {
+        showToast('Gagal menghapus invoice', 'error');
+      }
+    };
+
+    window.cancelDelete = function(id, originalContent) {
+      const card = document.querySelector(`[data-id="${id}"]`);
+      if (card) {
+        card.innerHTML = originalContent;
+      }
+    };
+
+    function updateCounts() {
+      const total = invoices.length;
+      const match = invoices.filter(inv => inv.validation_status === 'COCOK').length;
+      const mismatch = invoices.filter(inv => inv.validation_status === 'SELISIH').length;
+      const paid = invoices.filter(inv => inv.payment_status === 'LUNAS').length;
+      const unpaid = invoices.filter(inv => inv.payment_status !== 'LUNAS').length;
+
+      document.getElementById('totalCount').textContent = total;
+      document.getElementById('paidCount').textContent = paid;
+      document.getElementById('unpaidCount').textContent = unpaid;
+      document.getElementById('countAll').textContent = total;
+      document.getElementById('countMatch').textContent = match;
+      document.getElementById('countMismatch').textContent = mismatch;
+      document.getElementById('countPaid').textContent = paid;
+      document.getElementById('countUnpaid').textContent = unpaid;
+    }
+
+    function showToast(message, type = 'success') {
+      const toast = document.createElement('div');
+      toast.className = `toast ${type === 'success' ? 'bg-green-500' : 'bg-red-500'} text-white`;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      setTimeout(() => {
+        toast.remove();
+      }, 3500);
+    }
+
+    document.getElementById('fileInput').addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        handleFileUpload(e.target.files);
+      }
+    });
+
+    const dropZone = document.getElementById('dropZone');
+    
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('drag-over');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('drag-over');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      
+      if (e.dataTransfer.files.length > 0) {
+        handleFileUpload(e.dataTransfer.files);
+      }
+    });
+
+    dropZone.addEventListener('click', () => {
+      document.getElementById('fileInput').click();
+    });
+
+    const filterButtons = {
+      filterAll: 'all',
+      filterMatch: 'match',
+      filterMismatch: 'mismatch',
+      filterPaid: 'paid',
+      filterUnpaid: 'unpaid'
+    };
+
+    Object.keys(filterButtons).forEach(buttonId => {
+      document.getElementById(buttonId).addEventListener('click', () => {
+        currentFilter = filterButtons[buttonId];
+        currentPage = 1;
+        
+        Object.keys(filterButtons).forEach(id => {
+          const btn = document.getElementById(id);
+          if (id === buttonId) {
+            btn.classList.remove('bg-gray-100', 'hover:bg-gray-200', 'text-gray-700', 'shadow-md');
+            btn.classList.add('bg-blue-600', 'text-white', 'shadow-lg', 'hover:shadow-xl', 'hover:scale-105');
+          } else {
+            btn.classList.remove('bg-blue-600', 'text-white', 'shadow-lg', 'hover:shadow-xl', 'hover:scale-105');
+            btn.classList.add('bg-gray-100', 'hover:bg-gray-200', 'text-gray-700', 'shadow-md');
+          }
+        });
+        
+        renderInvoiceList();
+      });
+    });
+
+    // Toggle minimize sections
+    document.getElementById('toggleUpload').addEventListener('click', function() {
+      const content = document.getElementById('uploadContent');
+      const icon = this.querySelector('svg');
+      
+      if (content.style.display === 'none') {
+        content.style.display = 'block';
+        icon.style.transform = 'rotate(0deg)';
+      } else {
+        content.style.display = 'none';
+        icon.style.transform = 'rotate(-90deg)';
+      }
+    });
+
+    document.getElementById('toggleSummary').addEventListener('click', function() {
+      const content = document.getElementById('summaryContent');
+      const icon = this.querySelector('svg');
+      
+      if (content.style.display === 'none') {
+        content.style.display = 'grid';
+        icon.style.transform = 'rotate(0deg)';
+      } else {
+        content.style.display = 'none';
+        icon.style.transform = 'rotate(-90deg)';
+      }
+    });
+
+    document.getElementById('toggleFilter').addEventListener('click', function() {
+      const content = document.getElementById('filterContent');
+      const icon = this.querySelector('svg');
+      
+      if (content.style.display === 'none') {
+        content.style.display = 'block';
+        icon.style.transform = 'rotate(0deg)';
+      } else {
+        content.style.display = 'none';
+        icon.style.transform = 'rotate(-90deg)';
+      }
+    });
+
+    document.getElementById('monthArchive').addEventListener('change', (e) => {
+      selectedMonthArchive = e.target.value;
+      currentPage = 1;
+      renderInvoiceList();
+    });
+
+    document.getElementById('prevPage').addEventListener('click', () => {
+      if (currentPage > 1) {
+        goToPage(currentPage - 1);
+      }
+    });
+
+    document.getElementById('nextPage').addEventListener('click', () => {
+      goToPage(currentPage + 1);
+    });
+
+    document.getElementById('shareWhatsAppBtn').addEventListener('click', () => {
+      let filteredInvoices = invoices;
+      
+      if (currentFilter === 'match') {
+        filteredInvoices = invoices.filter(inv => inv.validation_status === 'COCOK');
+      } else if (currentFilter === 'mismatch') {
+        filteredInvoices = invoices.filter(inv => inv.validation_status === 'SELISIH');
+      } else if (currentFilter === 'paid') {
+        filteredInvoices = invoices.filter(inv => inv.payment_status === 'LUNAS');
+      } else if (currentFilter === 'unpaid') {
+        filteredInvoices = invoices.filter(inv => inv.payment_status !== 'LUNAS');
+      }
+
+      if (dateFromFilter || dateToFilter) {
+        filteredInvoices = filteredInvoices.filter(inv => {
+          const invoiceDate = parseInvoiceDate(inv.invoice_date);
+          if (!invoiceDate) return true;
+          
+          if (dateFromFilter && invoiceDate < dateFromFilter) return false;
+          if (dateToFilter && invoiceDate > dateToFilter) return false;
+          
+          return true;
+        });
+      }
+
+      if (filteredInvoices.length === 0) {
+        showToast('Tidak ada invoice untuk dibagikan', 'error');
+        return;
+      }
+
+      const totalInvoice = filteredInvoices.reduce((sum, inv) => sum + inv.total_printed, 0);
+      const totalPaid = filteredInvoices.reduce((sum, inv) => sum + inv.total_paid, 0);
+      const totalRemaining = filteredInvoices.reduce((sum, inv) => sum + inv.remaining, 0);
+      const paidCount = filteredInvoices.filter(inv => inv.payment_status === 'LUNAS').length;
+      const unpaidCount = filteredInvoices.filter(inv => inv.payment_status !== 'LUNAS').length;
+
+      let filterName = 'Semua Invoice';
+      if (currentFilter === 'match') filterName = 'Invoice Cocok';
+      else if (currentFilter === 'mismatch') filterName = 'Invoice Selisih';
+      else if (currentFilter === 'paid') filterName = 'Invoice Lunas';
+      else if (currentFilter === 'unpaid') filterName = 'Invoice Belum Lunas';
+
+      let dateInfo = '';
+      if (dateFromFilter && dateToFilter) {
+        dateInfo = `\n📅 Periode: ${dateFromFilter.toLocaleDateString('id-ID')} - ${dateToFilter.toLocaleDateString('id-ID')}`;
+      } else if (dateFromFilter) {
+        dateInfo = `\n📅 Dari: ${dateFromFilter.toLocaleDateString('id-ID')}`;
+      } else if (dateToFilter) {
+        dateInfo = `\n📅 Sampai: ${dateToFilter.toLocaleDateString('id-ID')}`;
+      }
+
+      let message = `*📊 RINGKASAN INVOICE*\n`;
+      message += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+      message += `*Filter:* ${filterName}${dateInfo}\n`;
+      message += `*Total Invoice:* ${filteredInvoices.length}\n`;
+      message += `✅ Lunas: ${paidCount}\n`;
+      message += `⏳ Belum Lunas: ${unpaidCount}\n\n`;
+      message += `*💰 TOTAL KEUANGAN*\n`;
+      message += `━━━━━━━━━━━━━━━━━━━━\n`;
+      message += `• Total Invoice: Rp ${totalInvoice.toLocaleString('id-ID')}\n`;
+      message += `• Sudah Dibayar: Rp ${totalPaid.toLocaleString('id-ID')}\n`;
+      message += `• Sisa Tagihan: Rp ${totalRemaining.toLocaleString('id-ID')}\n\n`;
+
+      message += `*📋 DETAIL INVOICE* (${Math.min(filteredInvoices.length, 20)} dari ${filteredInvoices.length})\n`;
+      message += `━━━━━━━━━━━━━━━━━━━━\n`;
+      
+      filteredInvoices.slice(0, 20).forEach((inv, index) => {
+        const status = inv.payment_status === 'LUNAS' ? '✅' : inv.payment_status === 'SEBAGIAN' ? '◐' : '⏳';
+        message += `\n${index + 1}. *${inv.invoice_no}*\n`;
+        message += `   ${status} ${inv.payment_status}\n`;
+        message += `   👤 ${inv.buyer_name}\n`;
+        message += `   📅 ${inv.invoice_date}\n`;
+        message += `   💰 Total: Rp ${inv.total_printed.toLocaleString('id-ID')}\n`;
+        if (inv.remaining > 0) {
+          message += `   🔔 Sisa: Rp ${inv.remaining.toLocaleString('id-ID')}\n`;
+        }
+      });
+
+      if (filteredInvoices.length > 20) {
+        message += `\n... dan ${filteredInvoices.length - 20} invoice lainnya\n`;
+      }
+
+      message += `\n━━━━━━━━━━━━━━━━━━━━\n`;
+      message += `_Dibuat dengan PDF Invoice AutoCalc_`;
+
+      const encodedMessage = encodeURIComponent(message);
+      const whatsappUrl = `https://web.whatsapp.com/send?text=${encodedMessage}`;
+      
+      window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+      showToast('✅ Membuka WhatsApp Web...', 'success');
+    });
+
+    document.getElementById('dateFrom').addEventListener('change', (e) => {
+      if (e.target.value) {
+        dateFromFilter = new Date(e.target.value);
+        dateFromFilter.setHours(0, 0, 0, 0);
+      } else {
+        dateFromFilter = null;
+      }
+      currentPage = 1;
+      renderInvoiceList();
+    });
+
+    document.getElementById('dateTo').addEventListener('change', (e) => {
+      if (e.target.value) {
+        dateToFilter = new Date(e.target.value);
+        dateToFilter.setHours(23, 59, 59, 999);
+      } else {
+        dateToFilter = null;
+      }
+      currentPage = 1;
+      renderInvoiceList();
+    });
+
+    document.getElementById('clearDateFilter').addEventListener('click', () => {
+      document.getElementById('dateFrom').value = '';
+      document.getElementById('dateTo').value = '';
+      dateFromFilter = null;
+      dateToFilter = null;
+      currentPage = 1;
+      renderInvoiceList();
+    });
+
+    document.getElementById('closeModal').addEventListener('click', () => {
+      document.getElementById('detailModal').classList.add('hidden');
+    });
+
+    document.getElementById('detailModal').addEventListener('click', (e) => {
+      if (e.target.id === 'detailModal') {
+        document.getElementById('detailModal').classList.add('hidden');
+      }
+    });
+
+    async function onConfigChange(config) {
+      const titleElement = document.getElementById('appTitle');
+      if (titleElement) {
+        titleElement.textContent = config.app_title || defaultConfig.app_title;
+      }
+    }
+
+    if (window.elementSdk) {
+      window.elementSdk.init({
+        defaultConfig: defaultConfig,
+        onConfigChange: onConfigChange,
+        mapToCapabilities: (config) => ({
+          recolorables: [],
+          borderables: [],
+          fontEditable: undefined,
+          fontSizeable: undefined
+        }),
+        mapToEditPanelValues: (config) => new Map([
+          ['app_title', config.app_title || defaultConfig.app_title]
+        ])
+      });
+    }
+
+    initApp();
+  </script>
+ </body>
+</html>

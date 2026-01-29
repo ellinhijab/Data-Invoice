@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="en" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Neumorphic Login</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./js/config.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+  <style>
+    body {
+      box-sizing: border-box;
+    }
+    
+    * {
+      font-family: 'Poppins', sans-serif;
+    }
+    
+    .language-toggle {
+      position: fixed;
+      top: 24px;
+      right: 24px;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(255,255,255,0.95);
+      padding: 12px 20px;
+      border-radius: 50px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+      backdrop-filter: blur(10px);
+    }
+    
+    .lang-btn {
+      padding: 8px 12px;
+      border-radius: 20px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .lang-btn.active {
+      background: linear-gradient(135deg, #00C2FF, #007BFF);
+      box-shadow: 0 4px 12px rgba(0,162,255,0.3);
+    }
+    
+    .lang-btn:hover:not(.active) {
+      transform: scale(1.05);
+    }
+    
+    .main-circle {
+      width: 560px;
+      height: 560px;
+      background: linear-gradient(145deg, rgba(255,255,255,0.95), rgba(235,238,245,0.95));
+      border: 1px solid rgba(255,255,255,0.6);
+      border-radius: 50%;
+      box-shadow: 
+        0 25px 50px rgba(0,0,0,0.10),
+        -18px -18px 36px rgba(255,255,255,0.95);
+      backdrop-filter: blur(10px);
+    }
+    
+    .neumorphic-input {
+      width: 390px;
+      height: 58px;
+      border-radius: 29px;
+      background: #EEF1F6;
+      box-shadow: 
+        inset 6px 6px 12px rgba(0,0,0,0.10),
+        inset -6px -6px 12px rgba(255,255,255,0.9);
+      border: none;
+      outline: none;
+      padding: 0 28px;
+      font-size: 16px;
+      color: #3A3A3A;
+      transition: all 0.3s ease;
+    }
+    
+    .neumorphic-input::placeholder {
+      color: #9AA3AE;
+    }
+    
+    .neumorphic-input:focus {
+      box-shadow: 
+        inset 8px 8px 16px rgba(0,0,0,0.12),
+        inset -6px -6px 12px rgba(255,255,255,0.9),
+        0 0 0 3px rgba(0,162,255,0.35);
+    }
+    
+    .login-btn {
+      width: 200px;
+      height: 54px;
+      border-radius: 28px;
+      background: linear-gradient(135deg, #FF2B6B, #FF005D);
+      border: none;
+      color: white;
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: 2px;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 12px 25px rgba(255,0,93,0.25);
+      transition: all 0.3s ease;
+    }
+    
+    .login-btn::before {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 20%;
+      right: 20%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent);
+      border-radius: 50%;
+    }
+    
+    .login-btn:hover {
+      transform: scale(1.03);
+      box-shadow: 0 16px 35px rgba(255,0,93,0.35);
+    }
+    
+    .login-btn:active {
+      transform: scale(0.98);
+    }
+    
+    .bubble {
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.3s ease;
+      animation: float 6s ease-in-out infinite;
+    }
+    
+    .bubble:hover {
+      transform: translateY(-5px);
+    }
+    
+    .bubble::after {
+      content: '';
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      background: rgba(255,255,255,0.6);
+      border-radius: 50%;
+      top: 15%;
+      left: 20%;
+      filter: blur(2px);
+    }
+    
+    .signup-bubble {
+      width: 140px;
+      height: 140px;
+      background: linear-gradient(135deg, #00C2FF, #007BFF);
+      box-shadow: 0 18px 35px rgba(0,162,255,0.35);
+      animation-delay: -2s;
+    }
+    
+    .forgot-bubble {
+      width: 210px;
+      height: 210px;
+      background: linear-gradient(135deg, #B400FF, #FF2BD6);
+      box-shadow: 0 22px 45px rgba(180,0,255,0.30);
+      animation-delay: -4s;
+    }
+    
+    @keyframes float {
+      0%, 100% {
+        transform: translateY(0px);
+      }
+      50% {
+        transform: translateY(-15px);
+      }
+    }
+    
+    .bubble:hover {
+      animation-play-state: paused;
+      transform: translateY(-8px);
+    }
+    
+    /* Tablet styles */
+    @media (max-width: 1023px) and (min-width: 768px) {
+      .main-circle {
+        width: 480px;
+        height: 480px;
+      }
+      
+      .neumorphic-input {
+        width: 340px;
+      }
+    }
+    
+    /* Mobile styles */
+    @media (max-width: 767px) {
+      .main-circle {
+        width: min(380px, calc(100vw - 48px));
+        height: min(380px, calc(100vw - 48px));
+      }
+      
+      .neumorphic-input {
+        width: 90%;
+        max-width: 320px;
+        height: 54px;
+        border-radius: 27px;
+        padding: 0 24px;
+        font-size: 15px;
+      }
+      
+      .login-btn {
+        width: 70%;
+        max-width: 240px;
+      }
+      
+      .signup-bubble {
+        width: 115px;
+        height: 115px;
+      }
+      
+      .forgot-bubble {
+        width: 160px;
+        height: 160px;
+      }
+      
+      .bubble::after {
+        width: 8px;
+        height: 8px;
+      }
+    }
+  </style>
+  <style>@view-transition { navigation: auto; }</style>
+  <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
+  <script src="/_sdk/element_sdk.js" type="text/javascript"></script>
+ </head>
+ <body class="h-full w-full overflow-auto" style="background: #F2F4F8;"><!-- Language Toggle -->
+  <div class="language-toggle"><button id="lang-id" class="lang-btn active" onclick="switchLanguage('id')" aria-label="Bahasa Indonesia">
+    <svg width="32" height="22" viewbox="0 0 32 22" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="32" height="11" fill="#FF0000" rx="1" /> <rect y="11" width="32" height="11" fill="#FFFFFF" rx="1" />
+    </svg></button> <button id="lang-en" class="lang-btn" onclick="switchLanguage('en')" aria-label="English">
+    <svg width="32" height="22" viewbox="0 0 32 22" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="32" height="22" fill="#012169" rx="1" /> <path d="M0 0L32 22M32 0L0 22" stroke="white" stroke-width="4.5" /> <path d="M0 0L32 22M32 0L0 22" stroke="#C8102E" stroke-width="2.8" /> <path d="M16 0V22M0 11H32" stroke="white" stroke-width="7.5" /> <path d="M16 0V22M0 11H32" stroke="#C8102E" stroke-width="4.5" />
+    </svg></button>
+  </div>
+  <div id="app" class="w-full min-h-full flex items-center justify-center p-6"><!-- Signup Form Modal -->
+   <div id="signup-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-6" style="backdrop-filter: blur(5px);">
+    <div class="main-circle flex flex-col items-center justify-center relative" style="max-width: 90vw;"><button id="close-signup" class="absolute top-6 right-6 text-2xl font-bold cursor-pointer bg-white bg-opacity-50 w-10 h-10 rounded-full flex items-center justify-center hover:bg-opacity-70 transition-all" style="color: #2E2E2E;" aria-label="Close signup form">×</button>
+     <h1 class="text-3xl sm:text-4xl font-bold mb-8" style="color: #2E2E2E;">Buat Akun</h1>
+     <form id="signup-form" class="flex flex-col items-center gap-5 w-full px-6">
+      <div class="relative w-full flex justify-center"><label for="signup-fullname" class="sr-only">Full Name</label> <input type="text" id="signup-fullname" class="neumorphic-input" placeholder="Nama Lengkap" autocomplete="name" required>
+      </div>
+      <div class="relative w-full flex justify-center"><label for="signup-email" class="sr-only">Email</label> <input type="email" id="signup-email" class="neumorphic-input" placeholder="Email" autocomplete="email" required>
+      </div>
+      <div class="relative w-full flex justify-center"><label for="signup-username" class="sr-only">Username</label> <input type="text" id="signup-username" class="neumorphic-input" placeholder="Nama Pengguna" autocomplete="username" required>
+      </div>
+      <div class="relative w-full flex justify-center"><label for="signup-password" class="sr-only">Password</label> <input type="password" id="signup-password" class="neumorphic-input" placeholder="Kata Sandi" autocomplete="new-password" required>
+      </div><button type="submit" id="signup-btn" class="login-btn mt-4"> DAFTAR </button>
+     </form>
+    </div>
+   </div><!-- Forgot Password Modal -->
+   <div id="forgot-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-6" style="backdrop-filter: blur(5px);">
+    <div class="main-circle flex flex-col items-center justify-center relative" style="max-width: 90vw;"><button id="close-forgot" class="absolute top-6 right-6 text-2xl font-bold cursor-pointer bg-white bg-opacity-50 w-10 h-10 rounded-full flex items-center justify-center hover:bg-opacity-70 transition-all" style="color: #2E2E2E;" aria-label="Close forgot password form">×</button>
+     <h1 id="forgot-modal-title" class="text-3xl sm:text-4xl font-bold mb-4 text-center px-6" style="color: #2E2E2E;">Reset Kata Sandi</h1>
+     <p id="forgot-modal-subtitle" class="text-sm text-center px-8 mb-6" style="color: #666;">Masukkan email Anda dan kami akan mengirimkan link untuk reset kata sandi</p>
+     <form id="forgot-form" class="flex flex-col items-center gap-5 w-full px-6">
+      <div class="relative w-full flex justify-center"><label for="forgot-email" class="sr-only">Email</label> <input type="email" id="forgot-email" class="neumorphic-input" placeholder="Email" autocomplete="email" required>
+      </div><button type="submit" id="forgot-btn" class="login-btn mt-4"> KIRIM LINK </button>
+     </form>
+    </div>
+   </div><!-- Desktop Layout -->
+   <div id="desktop-layout" class="hidden lg:flex w-full max-w-7xl items-center justify-between gap-8"><!-- Left: Main Circle -->
+    <div class="flex-1 flex justify-center lg:justify-end lg:pr-12">
+     <div class="main-circle flex flex-col items-center justify-center">
+      <h1 id="sign-in-title" class="text-[44px] font-bold mb-10" style="color: #2E2E2E;">Masuk</h1>
+      <form id="login-form" class="flex flex-col items-center gap-5">
+       <div class="relative"><label for="username-desktop" class="sr-only">Email</label> <input type="email" id="username-desktop" class="neumorphic-input" placeholder="Email" autocomplete="email">
+       </div>
+       <div class="relative"><label for="password-desktop" class="sr-only">Password</label> <input type="password" id="password-desktop" class="neumorphic-input" placeholder="Kata Sandi" autocomplete="current-password">
+       </div><button type="submit" id="login-btn" class="login-btn mt-6"> MASUK </button>
+      </form>
+     </div>
+    </div><!-- Right: Floating Bubbles -->
+    <div class="flex-1 flex flex-col items-start gap-8 pl-8">
+     <div class="signup-bubble bubble" role="button" tabindex="0" aria-label="Sign up"><span id="signup-text" class="text-white font-semibold text-base">Daftar</span>
+     </div>
+     <div class="forgot-bubble bubble ml-12" role="button" tabindex="0" aria-label="Forgot password"><span id="forgot-text" class="text-white font-semibold text-base text-center leading-tight px-4">Lupa<br>
+       Kata Sandi?</span>
+     </div>
+    </div>
+   </div><!-- Tablet & Mobile Layout -->
+   <div class="lg:hidden flex flex-col items-center gap-8 w-full"><!-- Main Circle -->
+    <div class="main-circle flex flex-col items-center justify-center">
+     <h1 id="sign-in-title-mobile" class="text-3xl sm:text-4xl font-bold mb-8" style="color: #2E2E2E;">Masuk</h1>
+     <form id="login-form-mobile" class="flex flex-col items-center gap-5 w-full px-6">
+      <div class="relative w-full flex justify-center"><label for="username-mobile" class="sr-only">Email</label> <input type="email" id="username-mobile" class="neumorphic-input" placeholder="Email" autocomplete="email">
+      </div>
+      <div class="relative w-full flex justify-center"><label for="password-mobile" class="sr-only">Password</label> <input type="password" id="password-mobile" class="neumorphic-input" placeholder="Kata Sandi" autocomplete="current-password">
+      </div><button type="submit" id="login-btn-mobile" class="login-btn mt-4"> MASUK </button>
+     </form>
+    </div><!-- Bubbles -->
+    <div class="flex flex-wrap items-center justify-center gap-6 mt-4">
+     <div class="signup-bubble bubble" role="button" tabindex="0" aria-label="Sign up"><span id="signup-text-mobile" class="text-white font-semibold text-sm sm:text-base">Daftar</span>
+     </div>
+     <div class="forgot-bubble bubble" role="button" tabindex="0" aria-label="Forgot password"><span id="forgot-text-mobile" class="text-white font-semibold text-sm sm:text-base text-center leading-tight px-3">Lupa<br>
+       Kata Sandi?</span>
+     </div>
+    </div>
+   </div>
+  </div>
+  <script>
+    // Language translations
+    const translations = {
+      id: {
+        signIn: 'Masuk',
+        username: 'Email',
+        password: 'Kata Sandi',
+        loginBtn: 'MASUK',
+        signingIn: 'Masuk...',
+        signup: 'Daftar',
+        forgotPassword: 'Lupa\nKata Sandi?',
+        createAccount: 'Buat Akun',
+        fullName: 'Nama Lengkap',
+        email: 'Email',
+        signUpBtn: 'DAFTAR',
+        creating: 'Membuat...',
+        accountCreated: '✓ Akun Dibuat!',
+        resetPassword: 'Reset Kata Sandi',
+        resetSubtitle: 'Masukkan email Anda dan kami akan mengirimkan link untuk reset kata sandi',
+        sendLinkBtn: 'KIRIM LINK',
+        sending: 'Mengirim...',
+        linkSent: '✓ Link Terkirim!'
+      },
+      en: {
+        signIn: 'Sign in',
+        username: 'Email',
+        password: 'Password',
+        loginBtn: 'LOGIN',
+        signingIn: 'Signing in...',
+        signup: 'Signup',
+        forgotPassword: 'Forgot\nPassword?',
+        createAccount: 'Create Account',
+        fullName: 'Full Name',
+        email: 'Email',
+        signUpBtn: 'SIGN UP',
+        creating: 'Creating...',
+        accountCreated: '✓ Account Created!',
+        resetPassword: 'Reset Password',
+        resetSubtitle: 'Enter your email and we will send you a password reset link',
+        sendLinkBtn: 'SEND LINK',
+        sending: 'Sending...',
+        linkSent: '✓ Link Sent!'
+      }
+    };
+
+    let currentLanguage = 'id';
+
+    function switchLanguage(lang) {
+      currentLanguage = lang;
+      
+      // Update button states
+      document.getElementById('lang-id').classList.toggle('active', lang === 'id');
+      document.getElementById('lang-en').classList.toggle('active', lang === 'en');
+      
+      const t = translations[lang];
+      
+      // Update all text content
+      document.querySelectorAll('#sign-in-title, #sign-in-title-mobile').forEach(el => {
+        el.textContent = t.signIn;
+      });
+      
+      document.querySelectorAll('#username-desktop, #username-mobile').forEach(el => {
+        el.placeholder = t.username;
+      });
+      
+      document.querySelectorAll('#password-desktop, #password-mobile').forEach(el => {
+        el.placeholder = t.password;
+      });
+      
+      document.querySelectorAll('#login-btn, #login-btn-mobile').forEach(el => {
+        el.textContent = t.loginBtn;
+      });
+      
+      document.querySelectorAll('#signup-text, #signup-text-mobile').forEach(el => {
+        el.textContent = t.signup;
+      });
+      
+      document.querySelectorAll('#forgot-text, #forgot-text-mobile').forEach(el => {
+        el.innerHTML = t.forgotPassword.replace(/\n/g, '<br>');
+      });
+      
+      // Update signup modal
+      document.querySelector('#signup-modal h1').textContent = t.createAccount;
+      document.getElementById('signup-fullname').placeholder = t.fullName;
+      document.getElementById('signup-email').placeholder = t.email;
+      document.getElementById('signup-username').placeholder = t.username;
+      document.getElementById('signup-password').placeholder = t.password;
+      document.getElementById('signup-btn').textContent = t.signUpBtn;
+      
+      // Update forgot password modal
+      document.getElementById('forgot-modal-title').textContent = t.resetPassword;
+      document.getElementById('forgot-modal-subtitle').textContent = t.resetSubtitle;
+      document.getElementById('forgot-email').placeholder = t.email;
+      document.getElementById('forgot-btn').textContent = t.sendLinkBtn;
+    }
+
+    // ---------------- Supabase Auth ----------------
+    const SUPABASE_URL = window.__SUPABASE_URL;
+    const SUPABASE_ANON_KEY = window.__SUPABASE_ANON_KEY;
+    const sb = (SUPABASE_URL && SUPABASE_ANON_KEY)
+      ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+      : null;
+
+    function toast(msg) {
+      // quick & simple: can be replaced with nicer toast later
+      alert(msg);
+    }
+
+    async function signIn(email, password, btnEl, restoreText) {
+      if (!sb) return toast('Supabase belum dikonfigurasi. Isi js/config.js dulu.');
+      try {
+        const { data, error } = await sb.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        // session ok -> go to app
+        window.location.href = './app.html';
+      } catch (e) {
+        toast('Gagal login: ' + (e?.message || e));
+      } finally {
+        if (btnEl) {
+          btnEl.disabled = false;
+          btnEl.textContent = restoreText;
+        }
+      }
+    }
+
+    async function signUp(fullName, username, email, password, btnEl, restoreText) {
+      if (!sb) return toast('Supabase belum dikonfigurasi. Isi js/config.js dulu.');
+      try {
+        const { data, error } = await sb.auth.signUp({
+          email,
+          password,
+          options: { data: { full_name: fullName, username } }
+        });
+        if (error) throw error;
+
+        // If email confirmation is ON, user must confirm first.
+        toast('Berhasil daftar. Jika diminta, cek email untuk konfirmasi. Setelah itu login.');
+        hideSignupModal();
+      } catch (e) {
+        toast('Gagal daftar: ' + (e?.message || e));
+      } finally {
+        if (btnEl) {
+          btnEl.disabled = false;
+          btnEl.textContent = restoreText;
+        }
+      }
+    }
+
+    async function resetPassword(email, btnEl, restoreText) {
+      if (!sb) return toast('Supabase belum dikonfigurasi. Isi js/config.js dulu.');
+      try {
+        // IMPORTANT: set redirectTo in Supabase Auth settings or pass here
+        const { error } = await sb.auth.resetPasswordForEmail(email, {
+          redirectTo: window.location.origin + '/reset-password.html'
+        });
+        if (error) throw error;
+        toast('Link reset password sudah dikirim (cek inbox/spam).');
+        hideForgotModal();
+      } catch (e) {
+        toast('Gagal kirim link: ' + (e?.message || e));
+      } finally {
+        if (btnEl) {
+          btnEl.disabled = false;
+          btnEl.textContent = restoreText;
+        }
+      }
+    }
+
+    // Form submission handlers (Desktop)
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('login-btn');
+      const t = translations[currentLanguage];
+      const email = document.getElementById('username-desktop').value.trim();
+      const password = document.getElementById('password-desktop').value;
+      btn.textContent = t.signingIn;
+      btn.disabled = true;
+      await signIn(email, password, btn, t.loginBtn);
+    });
+
+    // Form submission handlers (Mobile)
+    document.getElementById('login-form-mobile').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('login-btn-mobile');
+      const t = translations[currentLanguage];
+      const email = document.getElementById('username-mobile').value.trim();
+      const password = document.getElementById('password-mobile').value;
+      btn.textContent = t.signingIn;
+      btn.disabled = true;
+      await signIn(email, password, btn, t.loginBtn);
+    });
+
+    // Show signup modal
+    function showSignupModal() {
+      const modal = document.getElementById('signup-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      document.getElementById('signup-fullname').focus();
+    }
+
+    // Hide signup modal
+    function hideSignupModal() {
+      const modal = document.getElementById('signup-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      document.getElementById('signup-form').reset();
+    }
+
+    // Bubble click handlers
+    document.querySelectorAll('.signup-bubble').forEach(bubble => {
+      bubble.addEventListener('click', () => {
+        bubble.style.transform = 'scale(0.95)';
+        setTimeout(() => {
+          bubble.style.transform = '';
+          showSignupModal();
+        }, 150);
+      });
+
+      bubble.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          bubble.click();
+        }
+      });
+    });
+
+    // Close signup modal
+    document.getElementById('close-signup').addEventListener('click', hideSignupModal);
+
+    // Close modal when clicking backdrop
+    document.getElementById('signup-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'signup-modal') {
+        hideSignupModal();
+      }
+    });
+
+    // Signup form submission
+    document.getElementById('signup-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('signup-btn');
+      const t = translations[currentLanguage];
+      const fullName = document.getElementById('signup-fullname').value.trim();
+      const username = document.getElementById('signup-username').value.trim();
+      const email = document.getElementById('signup-email').value.trim();
+      const password = document.getElementById('signup-password').value;
+
+      const originalText = btn.textContent;
+      btn.textContent = t.creating;
+      btn.disabled = true;
+
+      await signUp(fullName, username, email, password, btn, t.signUpBtn);
+    });
+
+    // Show forgot password modal
+    function showForgotModal() {
+      const modal = document.getElementById('forgot-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      document.getElementById('forgot-email').focus();
+    }
+
+    // Hide forgot password modal
+    function hideForgotModal() {
+      const modal = document.getElementById('forgot-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      document.getElementById('forgot-form').reset();
+    }
+
+    document.querySelectorAll('.forgot-bubble').forEach(bubble => {
+      bubble.addEventListener('click', () => {
+        bubble.style.transform = 'scale(0.95)';
+        setTimeout(() => {
+          bubble.style.transform = '';
+          showForgotModal();
+        }, 150);
+      });
+
+      bubble.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          bubble.click();
+        }
+      });
+    });
+
+    // Close forgot password modal
+    document.getElementById('close-forgot').addEventListener('click', hideForgotModal);
+
+    // Close modal when clicking backdrop
+    document.getElementById('forgot-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'forgot-modal') {
+        hideForgotModal();
+      }
+    });
+
+    // Forgot password form submission
+    document.getElementById('forgot-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('forgot-btn');
+      const t = translations[currentLanguage];
+      const email = document.getElementById('forgot-email').value.trim();
+      const originalText = btn.textContent;
+      btn.textContent = t.sending;
+      btn.disabled = true;
+
+      await resetPassword(email, btn, t.sendLinkBtn);
+    });
+const btn = document.getElementById('forgot-btn');
+      const t = translations[currentLanguage];
+      const originalText = btn.textContent;
+      btn.textContent = t.sending;
+      btn.disabled = true;
+      
+      setTimeout(() => {
+        btn.textContent = t.linkSent;
+        setTimeout(() => {
+          hideForgotModal();
+          btn.textContent = t.sendLinkBtn;
+          btn.disabled = false;
+        }, 2000);
+      }, 1500);
+    });
+  </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9c2a752bc3810b9e',t:'MTc2OTIwNDUxMi4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
