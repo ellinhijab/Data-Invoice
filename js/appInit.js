@@ -2,24 +2,20 @@
   const sb = window.sb;
   if (!sb) return;
 
-  // require login
   const { data } = await sb.auth.getSession();
   if (!data?.session?.user) {
     window.location.href = "login.html";
     return;
   }
 
-  // pakai SDK supabase
-  if (window.supabaseDataSdk) {
-    window.dataSdk = window.supabaseDataSdk;
-  }
+  if (window.supabaseDataSdk) window.dataSdk = window.supabaseDataSdk;
 
-  // jalankan initApp milik UI kamu (yang handle render/count/filter)
   if (typeof window.initApp === "function") {
     try { await window.initApp(); } catch (e) { console.error("initApp error:", e); }
+  } else {
+    console.warn("initApp() tidak ditemukan. Pastikan script UI utama masih ada.");
   }
 
-  // inject logout button kalau UI belum punya
   if (!document.getElementById("btnLogout")) {
     const b = document.createElement("button");
     b.id = "btnLogout";

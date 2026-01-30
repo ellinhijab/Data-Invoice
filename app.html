@@ -7,8 +7,6 @@
   <script src="/_sdk/element_sdk.js" onerror="console.warn('[SDK] element_sdk.js tidak ditemukan (mode standalone)')"></script>
   <script src="/_sdk/data_sdk.js" onerror="console.warn('[SDK] data_sdk.js tidak ditemukan (mode standalone)')"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-   <script src="./js/config.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <style>
     body {
@@ -128,10 +126,7 @@
          <p class="text-sm text-yellow-100 font-semibold mb-1">⏳ Belum Lunas</p>
          <p id="unpaidCount" class="text-3xl font-extrabold text-yellow-300">0</p>
         </div>
-       </div><button id="logoutBtn" class="px-6 py-4 bg-white bg-opacity-20 hover:bg-opacity-30 text-white font-bold rounded-2xl transition-all duration-200 flex items-center gap-2 shadow-xl hover:shadow-2xl hover:scale-105 border-2 border-white border-opacity-30">
-         🔒 Logout
-        </button>
-        <button id="resetAllBtn" class="px-7 py-4 bg-red-500 hover:bg-red-600 text-white font-bold rounded-2xl transition-all duration-200 flex items-center gap-3 shadow-xl hover:shadow-2xl hover:scale-105 border-2 border-red-400">
+       </div><button id="resetAllBtn" class="px-7 py-4 bg-red-500 hover:bg-red-600 text-white font-bold rounded-2xl transition-all duration-200 flex items-center gap-3 shadow-xl hover:shadow-2xl hover:scale-105 border-2 border-red-400">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
         </svg> Reset Semua </button>
       </div>
@@ -225,26 +220,6 @@
          </svg></button>
        </div>
        <div id="filterContent">
-
-        <!-- Admin/Owner Panel -->
-        <div id="adminPanel" class="mb-5 hidden bg-gradient-to-r from-slate-50 to-gray-50 border-3 border-slate-300 rounded-2xl p-5 shadow-md">
-          <div class="flex flex-col lg:flex-row lg:items-center gap-4 w-full">
-            <div class="flex items-center gap-3 shrink-0">
-              <span class="text-base font-extrabold text-gray-800">👑 Mode Admin</span>
-              <span id="adminRoleBadge" class="text-xs font-bold px-3 py-1 rounded-full bg-slate-200 text-slate-800">ROLE</span>
-            </div>
-            <div class="flex flex-col sm:flex-row gap-3 w-full">
-              <select id="adminUserSelect" class="w-full sm:w-96 px-6 py-3 border-3 border-slate-300 rounded-xl focus:border-slate-500 focus:outline-none text-base font-bold shadow-md bg-white hover:bg-slate-50 transition-all">
-                <option value="all">📊 Semua User</option>
-              </select>
-              <div class="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                <span>Menampilkan data:</span>
-                <span id="adminUserLabel" class="font-extrabold">Semua User</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <div class="mb-5 bg-gradient-to-r from-purple-50 to-pink-50 border-3 border-purple-300 rounded-2xl p-5 shadow-md">
          <div class="flex flex-wrap items-center gap-4 w-full">
           <div class="flex items-center gap-3">
@@ -463,261 +438,11 @@
        }
      };
 
-     // ---------------- Supabase DB/Storage layer ----------------
-      const SUPABASE_URL = window.__SUPABASE_URL;
-      const SUPABASE_ANON_KEY = window.__SUPABASE_ANON_KEY;
-      const SUPABASE_BUCKET = window.__SUPABASE_BUCKET || 'invoices';
-      const sb = (SUPABASE_URL && SUPABASE_ANON_KEY)
-        ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-        : null;
+     // Use real SDK when available, otherwise fallback.
+     window.dataSdk = window.dataSdk || localDataSdk;
 
-      // Role/RBAC helpers
-      let __myRole = 'user';
-      let __isPrivileged = false; // admin/owner
-      let __selectedUserId = 'all';
 
-      async function loadMyProfile() {
-        if (!sb) return null;
-        const session = await ensureSessionOrRedirect();
-        const uid = session?.user?.id;
-        if (!uid) return null;
-
-        const { data, error } = await sb.from('profiles').select('id,email,role,full_name,username').eq('id', uid).single();
-        if (error) {
-          console.warn('[profiles] gagal load role:', error);
-          return null;
-        }
-        __myRole = data?.role || 'user';
-        __isPrivileged = (__myRole === 'admin' || __myRole === 'owner');
-        return data;
-      }
-
-      async function populateAdminPanel() {
-        const panel = document.getElementById('adminPanel');
-        const select = document.getElementById('adminUserSelect');
-        const badge = document.getElementById('adminRoleBadge');
-        const label = document.getElementById('adminUserLabel');
-
-        if (!panel || !select || !badge || !label) return;
-
-        if (!__isPrivileged) {
-          panel.classList.add('hidden');
-          return;
-        }
-
-        panel.classList.remove('hidden');
-        badge.textContent = String(__myRole).toUpperCase();
-
-        // Load all users (profiles) for dropdown
-        const { data, error } = await sb
-          .from('profiles')
-          .select('id,email,full_name,username,role')
-          .order('email', { ascending: true });
-
-        if (error) {
-          console.warn('[profiles] gagal load user list:', error);
-          return;
-        }
-
-        // Keep current selection
-        const current = select.value || 'all';
-
-        // Reset options
-        select.innerHTML = '';
-        const optAll = document.createElement('option');
-        optAll.value = 'all';
-        optAll.textContent = '📊 Semua User';
-        select.appendChild(optAll);
-
-        (data || []).forEach(u => {
-          const opt = document.createElement('option');
-          opt.value = u.id;
-          const name = u.full_name || u.username || u.email || u.id.slice(0, 8);
-          const email = u.email ? ` (${u.email})` : '';
-          opt.textContent = `${name}${email}`;
-          select.appendChild(opt);
-        });
-
-        // Restore selection
-        if ([...select.options].some(o => o.value === current)) {
-          select.value = current;
-        } else {
-          select.value = 'all';
-        }
-        __selectedUserId = select.value;
-
-        label.textContent = (select.value === 'all')
-          ? 'Semua User'
-          : (select.options[select.selectedIndex]?.textContent || 'User');
-
-        // Hook change
-        if (!select.__hooked) {
-          select.addEventListener('change', async () => {
-            __selectedUserId = select.value || 'all';
-            label.textContent = (select.value === 'all')
-              ? 'Semua User'
-              : (select.options[select.selectedIndex]?.textContent || 'User');
-            await refreshAndNotify(window.dataSdk?._handler);
-          });
-          select.__hooked = true;
-        }
-      }
-
-      function dbToInvoice(row) {
-        if (!row) return row;
-        // keep UI expectations: __backendId + same fields
-        const inv = { ...row, __backendId: row.id };
-        delete inv.id;
-        return inv;
-      }
-
-      async function refreshAndNotify(handler) {
-        if (!sb) return;
-        let q = sb.from('invoices').select('*').order('uploaded_at', { ascending: false });
-        if (__isPrivileged && __selectedUserId && __selectedUserId !== 'all') {
-          q = q.eq('user_id', __selectedUserId);
-        }
-        const { data, error } = await q;
-        if (error) throw error;
-        handler?.onDataChanged?.(data.map(dbToInvoice));
-      }
-
-      async function ensureSessionOrRedirect() {
-        if (!sb) return null;
-        const { data } = await sb.auth.getSession();
-        if (!data?.session) {
-          window.location.href = './login.html';
-          return null;
-        }
-        return data.session;
-      }
-
-      const supabaseDataSdk = {
-        _handler: null,
-        async init(handler) {
-          this._handler = handler;
-          if (!sb) {
-            showToast('ℹ️ Supabase belum di-set. Mode lokal aktif (localStorage).', 'success');
-            const raw = localStorage.getItem(__LOCAL_STORAGE_KEY__);
-            const data = raw ? JSON.parse(raw) : [];
-            handler?.onDataChanged?.(data);
-            return { isOk: true, value: data };
-          }
-
-          await ensureSessionOrRedirect();
-
-          await loadMyProfile();
-          await populateAdminPanel();
-
-          try {
-            await refreshAndNotify(handler);
-            showToast('✅ Terhubung ke Supabase (multi-user aktif).', 'success');
-            return { isOk: true, value: [] };
-          } catch (e) {
-            console.error(e);
-            showToast('Gagal load data dari Supabase. Cek tabel/RLS.', 'error');
-            return { isOk: false, error: e?.message || String(e) };
-          }
-        },
-
-        async create(obj) {
-          if (!sb) return localDataSdk.create(obj);
-          await ensureSessionOrRedirect();
-
-          try {
-            // 1) Upload PDF (kalau ada)
-            let pdf_path = obj.pdf_path || null;
-            if (obj.__pdfFile) {
-              const session = await ensureSessionOrRedirect();
-              const userId = session?.user?.id;
-              const file = obj.__pdfFile;
-              const ext = (file.name.split('.').pop() || 'pdf').toLowerCase();
-              const filename = `${Date.now()}-${Math.random().toString(16).slice(2)}.${ext}`;
-              const path = `${userId}/${filename}`;
-
-              const up = await sb.storage.from(SUPABASE_BUCKET).upload(path, file, {
-                contentType: file.type || 'application/pdf',
-                upsert: false
-              });
-              if (up.error) throw up.error;
-              pdf_path = path;
-            }
-
-            // 2) Insert row
-            const payload = { ...obj };
-            delete payload.__backendId;
-            delete payload.__pdfFile;
-            payload.pdf_bucket = SUPABASE_BUCKET;
-            payload.pdf_path = pdf_path;
-            payload.original_filename = payload.original_filename || obj.__pdfFile?.name || null;
-            payload.file_size = payload.file_size || obj.__pdfFile?.size || null;
-
-            const ins = await sb.from('invoices').insert(payload).select('*').single();
-            if (ins.error) throw ins.error;
-
-            // 3) Refresh list
-            await refreshAndNotify(this._handler);
-            return { isOk: true, value: dbToInvoice(ins.data) };
-          } catch (e) {
-            console.error(e);
-            showToast('Gagal simpan ke Supabase: ' + (e?.message || e), 'error');
-            return { isOk: false, error: e?.message || String(e) };
-          }
-        },
-
-        async update(obj) {
-          if (!sb) return localDataSdk.update(obj);
-          await ensureSessionOrRedirect();
-
-          try {
-            const id = obj.__backendId;
-            const payload = { ...obj };
-            delete payload.__backendId;
-            delete payload.__pdfFile;
-
-            const upd = await sb.from('invoices').update(payload).eq('id', id).select('*').single();
-            if (upd.error) throw upd.error;
-
-            await refreshAndNotify(this._handler);
-            return { isOk: true, value: dbToInvoice(upd.data) };
-          } catch (e) {
-            console.error(e);
-            showToast('Gagal update: ' + (e?.message || e), 'error');
-            return { isOk: false, error: e?.message || String(e) };
-          }
-        },
-
-        async delete(obj) {
-          if (!sb) return localDataSdk.delete(obj);
-          await ensureSessionOrRedirect();
-
-          const id = obj.__backendId;
-          try {
-            // 1) Hapus file dulu (jika ada)
-            const path = obj.pdf_path;
-            const bucket = obj.pdf_bucket || SUPABASE_BUCKET;
-            if (path) {
-              const rm = await sb.storage.from(bucket).remove([path]);
-              if (rm.error) throw rm.error;
-            }
-
-            // 2) Hapus row
-            const del = await sb.from('invoices').delete().eq('id', id);
-            if (del.error) throw del.error;
-
-            await refreshAndNotify(this._handler);
-            return { isOk: true };
-          } catch (e) {
-            console.error(e);
-            showToast('Gagal hapus: ' + (e?.message || e), 'error');
-            return { isOk: false, error: e?.message || String(e) };
-          }
-        }
-      };
-
-      // Prefer Supabase when configured; fallback to browser localStorage.
-      window.dataSdk = supabaseDataSdk;
-let invoices = [];
+    let invoices = [];
     let currentFilter = 'all';
     let currentInvoiceForPayment = null;
     let dateFromFilter = null;
@@ -741,17 +466,6 @@ let invoices = [];
         showToast('Gagal menginisialisasi aplikasi', 'error');
       }
     }
-
-     // Logout (Supabase only)
-     document.getElementById('logoutBtn')?.addEventListener('click', async () => {
-       try {
-         if (typeof sb !== 'undefined' && sb) {
-           await sb.auth.signOut();
-         }
-       } finally {
-         window.location.href = './login.html';
-       }
-     });
 
     function generateFingerprint(invoiceNo, date, total) {
       const str = `${invoiceNo}-${date}-${total}`;
@@ -1001,10 +715,7 @@ if (pdfFiles.length === 0) {
               continue;
             }
             
-            invoiceData.__pdfFile = file;
-             invoiceData.original_filename = file.name;
-             invoiceData.file_size = file.size;
-             const result = await window.dataSdk.create(invoiceData);
+            const result = await window.dataSdk.create(invoiceData, file);
             
             if (result.isOk) {
               successCount++;
@@ -2161,11 +1872,9 @@ if (pdfFiles.length === 0) {
       });
     }
 
+    initApp();
   </script>
-<script src="./js/supabaseClient.js"></script>
-<script src="./js/auth.js"></script>
-<script src="./js/storage.js"></script>
-<script src="./js/invoicesApi.js"></script>
-<script src="./js/appInit.js"></script>
- </body>
+ 
+<script src="./js/supabaseDataSdk.js"></script>
+</body>
 </html>
